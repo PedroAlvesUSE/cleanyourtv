@@ -83,7 +83,7 @@ final class Config {
             "wallpaper_sources", false, "wallpaper_credit", false, "ambient_mode", false,
             "apple_style", true, "parallax", true, "continue_watching", false, "recents_row", false,
             "top_shelf", false, "clock_weather", false, "greeting", false, "global_search", false,
-            "quick_menu", false, "sleep_timer", false, "update_badges", false, "profiles", false,
+            "quick_menu", false, "sleep_timer", false, "profiles", false,
             "config_backup", false, "quick_resume", false, "watch_later", false, "owntv_channels", false,
             "phone_remote", false, "night_mode", false, "parental", false, "guest_mode", false,
             "seasonal_wallpaper", false, "auto_accent", false, "own_screensaver", false, "tv_panel", false,
@@ -254,6 +254,18 @@ final class Config {
         Boolean theme = themeFeatures(ctx.getResources(), read(dir == null ? null : new File(dir, FILE_NAME))).get(key);
         Object tv = ctx.getSharedPreferences(SETTINGS_NAME, Context.MODE_PRIVATE).getAll().get(key);
         return resolveFeature(theme != null && theme, null, tv);
+    }
+
+    /** Teclas de microfone que abrem a busca no TizenTube (config.json, mic_keycodes); padrão em {@link MicSearch}. */
+    static int[] micKeycodes(Context ctx) {
+        File dir = dir(ctx);
+        JSONObject json = read(dir == null ? null : new File(dir, FILE_NAME));
+        return MicSearch.keycodes(json == null ? null : json.opt(MicSearch.CONFIG_KEY));
+    }
+
+    /** Modo visita: a tela inicial esconde Continuar assistindo, Recentes e perfis. */
+    boolean guestMode() {
+        return feature("guest_mode");
     }
 
     /** The choice made on the TV wins, then the theme's value; anything that is not a boolean is ignored. */
