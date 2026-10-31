@@ -31,6 +31,8 @@ public class ContinueListener extends NotificationListenerService {
     private static final long MIN_GAP_MS = 20_000;
 
     private static final Map<String, PendingIntent> SESSION_ACTIVITY = new HashMap<>();
+    /** True while the system has the listener bound and watching sessions. */
+    private static volatile boolean connected;
 
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService work = Executors.newSingleThreadExecutor();
@@ -68,9 +70,18 @@ public class ContinueListener extends NotificationListenerService {
         }
     }
 
+    /**
+     * Binds the listener again when the switches are on but it is not running: it unbinds itself when it connects
+     * with the switches off, and the system then keeps it snoozed until a rebind (a config.json change, for one).
+     */
+    static void ensureRunning(Context ctx) {
+        if (!connected && enabled(ctx)) refresh(ctx);
+    }
+
     @Override
     public void onListenerConnected() {
-        if (!enabled(this)) {
+        connected = enabled(this);
+        if (!connected) {
             try {
                 requestUnbind();
             } catch (Exception ignored) {
@@ -90,11 +101,13 @@ public class ContinueListener extends NotificationListenerService {
 
     @Override
     public void onListenerDisconnected() {
+        connected = false;
         stop();
     }
 
     @Override
     public void onDestroy() {
+        connected = false;
         stop();
         work.shutdown();
         super.onDestroy();

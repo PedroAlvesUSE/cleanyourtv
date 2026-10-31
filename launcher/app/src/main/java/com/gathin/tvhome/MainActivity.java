@@ -655,7 +655,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             return;
         }
         promptsPaused = false;
-        if (continueRow != null) continueRow.start();
+        if (continueRow != null) {
+            ContinueListener.ensureRunning(this);
+            continueRow.start();
+        }
         if (rebuildOnResume) {
             tilesReady = false;
             reloadApps(true);
