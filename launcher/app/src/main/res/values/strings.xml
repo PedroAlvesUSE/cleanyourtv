@@ -301,6 +301,7 @@
     <string name="set_parental_limit_d">After this time of use today, every app asks for the PIN. Needs: appops set com.gathin.tvhome GET_USAGE_STATS allow.</string>
     <string name="set_remote_info">Phone remote address</string>
     <string name="set_remote_info_d">Shows a QR code that opens the phone remote with no typing, plus the address and the PIN.</string>
+    <string name="remote_qr_title">Control “%1$s” from your phone</string>
     <string name="remote_qr_hint">Point your phone camera at the code. The remote opens with no typing.</string>
     <string name="remote_qr_or">Or open this address on the same network:</string>
     <string name="remote_done">Done</string>

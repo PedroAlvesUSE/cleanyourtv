@@ -284,6 +284,7 @@
     <string name="set_parental_limit_d">Depois deste tempo de uso hoje, todo app pede o PIN. Exige: appops set com.gathin.tvhome GET_USAGE_STATS allow.</string>
     <string name="set_remote_info">Endereço do controle pelo celular</string>
     <string name="set_remote_info_d">Mostra um QR code que abre o controle no celular sem digitar, mais o endereço e o PIN.</string>
+    <string name="remote_qr_title">Controle “%1$s” pelo celular</string>
     <string name="remote_qr_hint">Aponte a câmera do celular para o código. O controle abre sem digitar nada.</string>
     <string name="remote_qr_or">Ou abra este endereço na mesma rede:</string>
     <string name="remote_done">Concluído</string>

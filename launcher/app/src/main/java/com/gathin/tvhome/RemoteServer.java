@@ -8,9 +8,11 @@ import android.content.pm.ResolveInfo;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.drawable.Drawable;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.provider.Settings;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -97,6 +99,20 @@ final class RemoteServer implements LanServer.Handler {
         return current == null || ip == null ? null : "http://" + ip + ":" + current.port;
     }
 
+    /** O nome da TV nas configurações (device_name), senão o nome Bluetooth, senão o modelo. */
+    static String tvName(Context ctx) {
+        return RemoteApi.tvName(setting(ctx, true, Settings.Global.DEVICE_NAME), setting(ctx, false, "bluetooth_name"), Build.MODEL);
+    }
+
+    private static String setting(Context ctx, boolean global, String key) {
+        try {
+            return global ? Settings.Global.getString(ctx.getContentResolver(), key)
+                    : Settings.Secure.getString(ctx.getContentResolver(), key);
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
     /** A URL do QR, que já leva o PIN; null se o servidor está desligado ou sem rede. */
     static String pairUrl(Context ctx) {
         return RemoteApi.pairUrl(url(), pin(ctx));
@@ -110,6 +126,9 @@ final class RemoteServer implements LanServer.Handler {
             return LanServer.Response.error(gate.locked(System.currentTimeMillis()) ? 429 : 401, "pin");
         }
         if (r.path.equals("/api/ping")) return LanServer.Response.ok("ok");
+        if (r.path.equals("/api/info") && r.method.equals("GET")) {
+            return LanServer.Response.text(200, "application/json", RemoteApi.infoJson(tvName(app), HomeKeyService.extraKeys(app)));
+        }
         HomeKeyService service = HomeKeyService.instance();
         if (r.path.equals("/api/key") && r.method.equals("POST")) {
             String key = r.query.get("k");

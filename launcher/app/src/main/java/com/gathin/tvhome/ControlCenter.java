@@ -157,6 +157,12 @@ final class ControlCenter {
         status(saver).setVisibility(View.GONE);
         saver.setOnClickListener(v -> open(new Intent(a, SaverNowActivity.class)));
 
+        if (Config.feature(a, RemoteServer.FEATURE)) {
+            View phone = row(R.drawable.ic_remote, R.string.set_phone);
+            status(phone).setVisibility(View.GONE);
+            phone.setOnClickListener(v -> RemoteQrDialog.show(a));
+        }
+
         if (Config.feature(a, "quick_clean")) {
             View clean = row(R.drawable.ic_apps, R.string.cc_clean);
             cleanStatus = status(clean);

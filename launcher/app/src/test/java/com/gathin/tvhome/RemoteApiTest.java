@@ -89,7 +89,7 @@ public class RemoteApiTest {
             assertTrue(m.group(1), HomeKeyService.REMOTE_KEYS.contains(m.group(1)));
             n++;
         }
-        assertEquals(8, n);
+        assertEquals(12, n);
     }
 
     @Test
@@ -100,5 +100,23 @@ public class RemoteApiTest {
         assertTrue(page.contains("safe-area-inset-bottom"));
         assertTrue(page.contains("navigator.vibrate"));
         assertTrue(page.contains("prefers-reduced-motion"));
+    }
+
+    @Test
+    public void tvNamePrefersDeviceNameThenBluetoothThenModel() {
+        assertEquals("Quarto", RemoteApi.tvName("Quarto", "Quarto BT", "55P7K"));
+        assertEquals("Sala", RemoteApi.tvName("  ", "Sala", "55P7K"));
+        assertEquals("55P7K", RemoteApi.tvName(null, null, "55P7K"));
+        assertEquals("TV", RemoteApi.tvName(null, "", " "));
+        assertEquals("A B", RemoteApi.tvName("A\nB"));
+        char[] longName = new char[60];
+        Arrays.fill(longName, 'x');
+        assertEquals(RemoteApi.MAX_NAME, RemoteApi.tvName(new String(longName)).length());
+    }
+
+    @Test
+    public void infoJsonEscapesTheName() {
+        assertEquals("{\"name\":\"\\u003c/script\\u003e\",\"keys\":[\"input\",\"sleep\"]}",
+                RemoteApi.infoJson("</script>", Arrays.asList("input", "sleep")));
     }
 }

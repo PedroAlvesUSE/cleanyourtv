@@ -45,52 +45,73 @@ final class WebPages {
 
     private static final String REMOTE_CSS = """
             :root{color-scheme:dark;--glass:#1C1C1E;--glass2:#2C2C2E;--press:#3A3A3C;--t1:#F5F5F7;--t2:#A1A1A6;
-            --acc:#0A84FF;--ease:cubic-bezier(.2,.8,.2,1);--fast:120ms;--mid:240ms}
+            --acc:#0A84FF;--ease:cubic-bezier(.2,.8,.2,1);--fast:120ms;--mid:240ms;
+            --k:clamp(52px,8.4vh,64px);--u:clamp(42px,6.4vh,48px);--g:clamp(10px,1.8vh,16px);
+            --ring:inset 0 0 0 1px rgba(255,255,255,.06)}
             *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;
             -webkit-user-select:none;user-select:none}
-            html,body{height:100%}
-            body{margin:0;background:#000;color:var(--t1);overscroll-behavior:none;touch-action:manipulation;
+            html,body{margin:0}
+            body{background:#000;color:var(--t1);overscroll-behavior:none;touch-action:manipulation;
             font:17px/1.3 -apple-system,BlinkMacSystemFont,system-ui,"Segoe UI",Roboto,sans-serif}
             [hidden]{display:none!important}
-            main{max-width:430px;min-height:100%;margin:0 auto;display:flex;flex-direction:column;gap:20px;
+            main{max-width:430px;min-height:100vh;min-height:100dvh;margin:0 auto;display:flex;flex-direction:column;gap:var(--g);
             padding:calc(env(safe-area-inset-top) + 8px) calc(env(safe-area-inset-right) + 20px)
-            calc(env(safe-area-inset-bottom) + 24px) calc(env(safe-area-inset-left) + 20px)}
-            button{font:inherit;color:inherit;cursor:pointer}
-            button:focus-visible,input:focus-visible{outline:2px solid var(--acc);outline-offset:3px}
-            svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-            header{display:flex;align-items:center;justify-content:space-between;min-height:44px}
-            .brand{font-weight:600}
-            .st{display:flex;align-items:center;gap:8px;color:var(--t2);font-size:15px}
-            .dot{width:8px;height:8px;border-radius:50%;background:#30D158;transition:background var(--mid)}
+            calc(env(safe-area-inset-bottom) + 12px) calc(env(safe-area-inset-left) + 20px)}
+            button{font:inherit;color:inherit;cursor:pointer;-webkit-appearance:none;appearance:none}
+            button:focus-visible,input:focus-visible,.pad:focus-visible{outline:2px solid var(--acc);outline-offset:3px}
+            svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+            header{display:flex;align-items:center;gap:12px;min-height:48px}
+            .hd{flex:1;min-width:0}
+            h1{margin:0;font-size:26px;line-height:1.15;font-weight:700;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+            .st{display:flex;align-items:center;gap:6px;color:var(--t2);font-size:13px;min-height:18px}
+            .dot{width:7px;height:7px;border-radius:50%;background:#30D158;transition:background var(--mid)}
             .st.off .dot{background:#FF453A}
+            .pw{width:44px;height:44px;border:0;border-radius:50%;background:var(--glass);box-shadow:var(--ring);display:grid;place-items:center;
+            color:var(--t2);transition:background var(--fast),color var(--fast),transform var(--fast) var(--ease)}
+            .pw svg{width:20px;height:20px}
+            .pw:active{transform:scale(.92);background:var(--press)}
+            .pw.arm{background:#FF453A;color:#fff}
             .seg{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;padding:3px;border-radius:12px;background:var(--glass)}
             .seg button{min-height:44px;border:0;border-radius:9px;background:none;color:var(--t2);font-weight:600;font-size:15px;
             transition:background var(--mid) var(--ease),color var(--mid)}
             .seg button[aria-selected=true]{background:var(--press);color:var(--t1)}
-            .pad{position:relative;width:100%;height:min(calc(100vw - 40px),46vh,390px);border-radius:32px;overflow:hidden;
+            #app{flex:1;display:flex;flex-direction:column;gap:var(--g);min-height:0}
+            .rv{flex:1;display:flex;flex-direction:column;gap:var(--g);min-height:0}
+            .pad{position:relative;flex:1;min-height:150px;max-height:420px;border-radius:32px;overflow:hidden;
             touch-action:none;cursor:pointer;background:radial-gradient(130% 90% at 50% 0%,#2C2C2E 0%,#1C1C1E 72%);
             box-shadow:inset 0 0 0 1px rgba(255,255,255,.07);transition:transform var(--fast) var(--ease)}
             .pad.press{transform:scale(.985)}
-            .pad .ch{position:absolute;display:grid;width:26px;height:26px;color:rgba(255,255,255,.2);transition:color var(--mid),transform var(--mid) var(--ease)}
+            .pad .ch{position:absolute;display:grid;width:24px;height:24px;color:rgba(255,255,255,.2);transition:color var(--mid)}
             .pad .ch.on{color:var(--t1);transition-duration:60ms}
-            .ch.u{top:16px;left:50%;transform:translateX(-50%) rotate(-90deg)}
-            .ch.d{bottom:16px;left:50%;transform:translateX(-50%) rotate(90deg)}
-            .ch.l{left:16px;top:50%;transform:translateY(-50%) rotate(180deg)}
-            .ch.r{right:16px;top:50%;transform:translateY(-50%)}
+            .ch.u{top:14px;left:50%;transform:translateX(-50%) rotate(-90deg)}
+            .ch.d{bottom:14px;left:50%;transform:translateX(-50%) rotate(90deg)}
+            .ch.l{left:14px;top:50%;transform:translateY(-50%) rotate(180deg)}
+            .ch.r{right:14px;top:50%;transform:translateY(-50%)}
             .pad .mid{position:absolute;left:50%;top:50%;width:8px;height:8px;margin:-4px;border-radius:50%;background:rgba(255,255,255,.2)}
-            .pad .hint{position:absolute;left:0;right:0;bottom:48px;text-align:center;font-size:13px;color:var(--t2);
-            transition:opacity .6s}
+            .pad .hint{position:absolute;left:0;right:0;bottom:44px;text-align:center;font-size:13px;color:var(--t2);transition:opacity .6s}
             .rip{position:absolute;width:96px;height:96px;margin:-48px;border-radius:50%;pointer-events:none;
             background:radial-gradient(circle,rgba(255,255,255,.22),rgba(255,255,255,0) 70%);animation:rip .5s var(--ease) forwards}
+            .rip.long{animation-duration:.9s;background:radial-gradient(circle,rgba(10,132,255,.35),rgba(10,132,255,0) 70%)}
             @keyframes rip{from{transform:scale(.3);opacity:1}to{transform:scale(1.8);opacity:0}}
-            .keys{display:grid;grid-template-columns:repeat(3,72px);justify-content:space-between;row-gap:20px;padding:0 8px}
-            .c{width:72px;height:72px;border:0;border-radius:50%;background:var(--glass);display:grid;place-items:center;
+            .keys{display:grid;grid-template-columns:repeat(3,var(--k));justify-content:space-between;gap:var(--g) 0;padding:0 10px}
+            .c{width:var(--k);height:var(--k);border:0;border-radius:50%;background:var(--glass);box-shadow:var(--ring);display:grid;place-items:center;
             transition:background var(--fast),transform var(--fast) var(--ease)}
             .c:active,.c.down{background:var(--press);transform:scale(.93)}
-            .vol{grid-row:span 2;width:72px;border-radius:36px;background:var(--glass);display:flex;flex-direction:column;overflow:hidden}
+            .c.home{background:var(--t1);color:#000;box-shadow:none}
+            .c.home:active,.c.home.down{background:#C7C7CC}
+            .c.home svg{width:26px;height:26px}
+            .vol{grid-row:span 2;width:var(--k);border-radius:calc(var(--k) / 2);background:var(--glass);box-shadow:var(--ring);
+            display:flex;flex-direction:column;overflow:hidden}
             .vol button{flex:1;border:0;background:none;display:grid;place-items:center;transition:background var(--fast)}
             .vol button:active,.vol button.down{background:var(--press)}
-            .vol i{height:1px;margin:0 22px;background:rgba(255,255,255,.1)}
+            .vol i{height:1px;margin:0 18px;background:rgba(255,255,255,.1)}
+            .util{display:flex;justify-content:space-around;gap:8px;padding-top:2px}
+            .u{flex:1;max-width:84px;border:0;background:none;padding:0;display:flex;flex-direction:column;align-items:center;gap:5px;min-height:44px}
+            .uc{width:var(--u);height:var(--u);border-radius:50%;background:var(--glass);box-shadow:var(--ring);display:grid;place-items:center;
+            color:var(--t1);transition:background var(--fast),transform var(--fast) var(--ease)}
+            .uc svg{width:21px;height:21px}
+            .u:active .uc,.u.down .uc{background:var(--press);transform:scale(.92)}
+            .ul{font-size:11px;line-height:1.2;color:var(--t2);white-space:nowrap}
             .apps{display:grid;grid-template-columns:repeat(4,1fr);gap:20px 8px}
             .app{border:0;background:none;display:flex;flex-direction:column;align-items:center;gap:8px;min-height:44px;padding:0}
             .app i{display:block;width:64px;height:64px;border-radius:16px;overflow:hidden;background:var(--glass);
@@ -109,7 +130,7 @@ final class WebPages {
             transition:opacity var(--fast)}
             .go:active{opacity:.7}
             #login{flex:1;display:flex;flex-direction:column;justify-content:center;gap:16px;text-align:center}
-            #login h1{margin:0;font-size:28px}
+            #login h2{margin:0;font-size:28px}
             #login p{margin:0;color:var(--t2)}
             #pin{width:100%;min-height:64px;text-align:center;font-size:32px;letter-spacing:.5em;padding-left:.5em}
             #lm{min-height:22px;color:#FF453A}
@@ -127,27 +148,37 @@ final class WebPages {
         return "<svg viewBox='0 0 24 24' aria-hidden=true>" + paths + "</svg>";
     }
 
+    /** Botão utilitário com ícone em círculo e rótulo visível embaixo; só aparece se a TV aceita a tecla. */
+    private static String util(String key, String label, String paths) {
+        return "<button class=u data-k=" + key + " data-x=" + key + " hidden><span class=uc>" + icon(paths)
+                + "</span><span class=ul data-t='" + label + "'></span></button>";
+    }
+
     private static final String REMOTE_BODY = "<main>"
-            + "<header><span class=brand>CleanYourTV</span>"
-            + "<span class=st id=st role=status><span class=dot></span><span id=stt></span></span></header>"
-            + "<section id=login hidden><h1 data-t='Controle da TV|TV Remote'></h1>"
+            + "<header><div class=hd><h1 id=tvname>CleanYourTV</h1>"
+            + "<span class=st id=st role=status><span class=dot></span><span id=stt></span></span></div>"
+            + "<button class=pw id=power data-x=sleep hidden data-a='Desligar a tela|Turn the screen off'>"
+            + icon("<path d='M12 3v9'/><path d='M18.4 6.6a9 9 0 1 1-12.8 0'/>") + "</button></header>"
+            + "<section id=login hidden><h2 data-t='Controle da TV|TV Remote'></h2>"
             + "<p data-t='Digite o PIN mostrado na TV.|Enter the PIN shown on the TV.'></p>"
             + "<form onsubmit='connect();return false'><input id=pin inputmode=numeric pattern='[0-9]*' maxlength=4 "
             + "autocomplete=one-time-code aria-label=PIN placeholder='••••'></form>"
             + "<button class='go big' onclick=connect() data-t='Conectar|Connect'></button><div id=lm role=alert></div></section>"
-            + "<section id=app hidden style='display:flex;flex-direction:column;gap:20px'>"
+            + "<section id=app hidden>"
             + "<nav class=seg role=tablist>"
             + "<button role=tab data-v=remote aria-selected=true data-t='Controle|Remote'></button>"
             + "<button role=tab data-v=apps aria-selected=false data-t='Apps|Apps'></button>"
             + "<button role=tab data-v=kbd aria-selected=false data-t='Teclado|Keyboard'></button></nav>"
-            + "<div data-view=remote style='display:flex;flex-direction:column;gap:28px'>"
-            + "<div class=pad id=pad role=button tabindex=0 data-a='Touchpad: deslize para navegar, toque para OK|Touchpad: swipe to move, tap for OK'>"
+            + "<div data-view=remote class=rv>"
+            + "<div class=pad id=pad role=button tabindex=0 data-a='Touchpad: deslize para navegar, toque para OK, segure para opções"
+            + "|Touchpad: swipe to move, tap for OK, hold for options'>"
             + "<span class='ch u'>" + SVG_CHEVRON + "</span><span class='ch d'>" + SVG_CHEVRON + "</span>"
             + "<span class='ch l'>" + SVG_CHEVRON + "</span><span class='ch r'>" + SVG_CHEVRON + "</span>"
             + "<span class=mid></span><span class=hint id=hint data-t='Deslize para navegar · toque para OK|Swipe to move · tap for OK'></span></div>"
             + "<div class=keys>"
             + "<button class=c data-k=back data-a='Voltar|Back'>" + icon("<path d='M15 18l-6-6 6-6'/>") + "</button>"
-            + "<button class=c data-k=home data-a='Início|Home'>" + icon("<rect x=3 y=5 width=18 height=12 rx=2.5 /><path d='M8 21h8'/>") + "</button>"
+            + "<button class='c home' data-k=home data-a='Início|Home'>"
+            + icon("<rect x=2.5 y=4.5 width=19 height=13 rx=2.5 /><path d='M8 21h8'/>") + "</button>"
             + "<div class=vol><button data-k=volup data-rep data-a='Aumentar volume|Volume up'>" + icon("<path d='M12 6v12M6 12h12'/>")
             + "</button><i></i><button data-k=voldown data-rep data-a='Diminuir volume|Volume down'>" + icon("<path d='M6 12h12'/>") + "</button></div>"
             + "<button class=c data-k=playpause data-a='Reproduzir ou pausar|Play or pause'>"
@@ -158,6 +189,17 @@ final class WebPages {
             + "<button class=c id=find data-a='Buscar no YouTube|Search YouTube'>"
             + icon("<circle cx=11 cy=11 r=7 /><path d='M20 20l-3.8-3.8'/>") + "</button>"
             + "<button class=c data-k=next data-a='Próximo|Next'>" + icon("<path d='M5 6l9 6-9 6z' fill=currentColor /><path d='M18 6v12'/>") + "</button>"
+            + "</div><div class=util>"
+            + util("options", "Opções|Options", "<circle cx=5.5 cy=12 r=1.2 fill=currentColor /><circle cx=12 cy=12 r=1.2 fill=currentColor />"
+                    + "<circle cx=18.5 cy=12 r=1.2 fill=currentColor />")
+            + util("input", "Entrada|Input", "<rect x=3 y=4 width=18 height=13 rx=2 /><path d='M12 8v5M9.5 10.5L12 13l2.5-2.5M8 21h8'/>")
+            + util("panel", "Painel|Panel", "<path d='M4 7h9M17 7h3M4 17h3M11 17h9'/><circle cx=15 cy=7 r=2 /><circle cx=9 cy=17 r=2 />")
+            + util("settings", "Ajustes|Settings", "<circle cx=12 cy=12 r=3 /><path d='M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8"
+                    + "l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1"
+                    + "a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0"
+                    + "-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5"
+                    + " 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1"
+                    + "a1.7 1.7 0 0 0-1.5 1z'/>")
             + "</div></div>"
             + "<div data-view=apps hidden><div class=apps id=apps></div></div>"
             + "<div data-view=kbd hidden style='display:flex;flex-direction:column;gap:16px'>"
@@ -181,8 +223,8 @@ final class WebPages {
             const pt=(navigator.language||'').toLowerCase().startsWith('pt');const T=(a,b)=>pt?a:b;
             const $=id=>document.getElementById(id);
             let pin=localStorage.getItem('pin')||'';
-            function i18n(){document.documentElement.lang=pt?'pt-BR':'en';
             const pick=s=>{const p=s.split('|');return T(p[0],p[1])};
+            function i18n(){document.documentElement.lang=pt?'pt-BR':'en';
             document.querySelectorAll('[data-t]').forEach(e=>e.textContent=pick(e.dataset.t));
             document.querySelectorAll('[data-a]').forEach(e=>e.setAttribute('aria-label',pick(e.dataset.a)));
             document.querySelectorAll('[data-p]').forEach(e=>e.placeholder=pick(e.dataset.p))}
@@ -190,7 +232,7 @@ final class WebPages {
             tt=setTimeout(()=>e.classList.remove('show'),1800)}
             function status(ok,t){$('st').classList.toggle('off',!ok);$('stt').textContent=t}
             function buzz(ms){try{if(navigator.vibrate)navigator.vibrate(ms)}catch(e){}}
-            function showLogin(m){$('app').hidden=true;$('login').hidden=false;$('lm').textContent=m||'';$('st').hidden=true}
+            function showLogin(m){$('app').hidden=true;$('login').hidden=false;$('lm').textContent=m||'';$('st').hidden=true;$('power').hidden=true}
             async function api(path,body,o){o=o||{};let r;
             try{r=await fetch(path,{method:body===undefined?'GET':'POST',headers:{'X-Pin':pin},body})}
             catch(e){status(false,T('Sem conexão','Offline'));return null}
@@ -198,9 +240,16 @@ final class WebPages {
             if(r.status==429){showLogin(T('Muitas tentativas. Aguarde 1 minuto.','Too many tries. Wait 1 minute.'));return null}
             if(!r.ok){if(!o.quiet)toast(T('Não deu certo.','That did not work.'));return null}
             return o.raw?r:await r.text()}
+            let extras=[];
+            async function info(){const x=await api('/api/info',undefined,{quiet:1});if(x===null)return;let d;
+            try{d=JSON.parse(x)}catch(e){return}
+            const n=typeof d.name=='string'&&d.name?d.name:'TV';$('tvname').textContent=n;
+            document.title=n+' · '+T('Controle','Remote');
+            extras=Array.isArray(d.keys)?d.keys:[];
+            document.querySelectorAll('[data-x]').forEach(e=>e.hidden=!extras.includes(e.dataset.x))}
             function connect(){const v=$('pin').value.trim();if(v)pin=v;
-            api('/api/ping').then(x=>{if(x===null)return;localStorage.setItem('pin',pin);$('login').hidden=true;$('app').hidden=false;$('st').hidden=false;
-            status(true,T('Conectado','Connected'))})}
+            api('/api/ping').then(x=>{if(x===null)return;localStorage.setItem('pin',pin);$('login').hidden=true;$('app').hidden=false;
+            $('st').hidden=false;status(true,T('Conectado','Connected'));info()})}
             let q=Promise.resolve();
             function key(k){q=q.then(()=>api('/api/key?k='+k,'')).then(x=>{
             if(x==='off')status(false,T('Ative a acessibilidade na TV','Turn on accessibility on the TV'));
@@ -222,26 +271,36 @@ final class WebPages {
             function send(path,id,done,clear){const e=$(id),v=e.value.trim();if(!v)return false;
             api(path,v).then(x=>{if(x===null)return;buzz(10);toast(done);if(clear){e.value='';e.blur()}});return false}
             function flash(d){const c=document.querySelector('.ch.'+d[0]);c.classList.add('on');setTimeout(()=>c.classList.remove('on'),160)}
-            function ripple(x,y){const pad=$('pad'),b=pad.getBoundingClientRect(),s=document.createElement('span');s.className='rip';
-            s.style.left=(x-b.left)+'px';s.style.top=(y-b.top)+'px';pad.append(s);setTimeout(()=>s.remove(),520)}
+            function ripple(x,y,cls){const pad=$('pad'),b=pad.getBoundingClientRect(),s=document.createElement('span');s.className='rip'+(cls?' '+cls:'');
+            s.style.left=(x-b.left)+'px';s.style.top=(y-b.top)+'px';pad.append(s);setTimeout(()=>s.remove(),950)}
             function dir(dx,dy){return Math.abs(dx)>Math.abs(dy)?(dx>0?'right':'left'):(dy>0?'down':'up')}
             function move(d){key(d);flash(d);buzz(5)}
-            function setupPad(){const pad=$('pad'),STEP=44,FLICK=22;let st=null;
-            pad.addEventListener('pointerdown',e=>{pad.setPointerCapture(e.pointerId);st={x:e.clientX,y:e.clientY,x0:e.clientX,y0:e.clientY,t:Date.now(),moved:false};
-            ripple(e.clientX,e.clientY);$('hint').style.opacity=0});
-            pad.addEventListener('pointermove',e=>{if(!st)return;const dx=e.clientX-st.x,dy=e.clientY-st.y;
-            if(Math.max(Math.abs(dx),Math.abs(dy))<STEP)return;move(dir(dx,dy));st.x=e.clientX;st.y=e.clientY;st.moved=true});
-            pad.addEventListener('pointerup',e=>{if(!st)return;const dx=e.clientX-st.x0,dy=e.clientY-st.y0,
+            function setupPad(){const pad=$('pad'),STEP=44,FLICK=22,SLOP=10,HOLD=550;let st=null,lt;
+            pad.addEventListener('pointerdown',e=>{pad.setPointerCapture(e.pointerId);
+            st={x:e.clientX,y:e.clientY,x0:e.clientX,y0:e.clientY,t:Date.now(),moved:false,long:false};
+            ripple(e.clientX,e.clientY);$('hint').style.opacity=0;clearTimeout(lt);
+            if(extras.includes('options'))lt=setTimeout(()=>{if(!st||st.moved)return;st.long=true;key('options');buzz(20);
+            ripple(st.x0,st.y0,'long');toast(T('Opções','Options'))},HOLD)});
+            pad.addEventListener('pointermove',e=>{if(!st)return;
+            if(Math.max(Math.abs(e.clientX-st.x0),Math.abs(e.clientY-st.y0))>SLOP)clearTimeout(lt);
+            const dx=e.clientX-st.x,dy=e.clientY-st.y;
+            if(st.long||Math.max(Math.abs(dx),Math.abs(dy))<STEP)return;move(dir(dx,dy));st.x=e.clientX;st.y=e.clientY;st.moved=true});
+            pad.addEventListener('pointerup',e=>{clearTimeout(lt);if(!st)return;const dx=e.clientX-st.x0,dy=e.clientY-st.y0,
             far=Math.max(Math.abs(dx),Math.abs(dy)),quick=Date.now()-st.t<350;
-            if(!st.moved){if(far>=FLICK&&quick)move(dir(dx,dy));else if(far<FLICK){key('ok');buzz(12);
+            if(!st.moved&&!st.long){if(far>=FLICK&&quick)move(dir(dx,dy));else if(far<FLICK){key('ok');buzz(12);
             pad.classList.add('press');setTimeout(()=>pad.classList.remove('press'),120)}}st=null});
-            pad.addEventListener('pointercancel',()=>st=null);
+            pad.addEventListener('pointercancel',()=>{clearTimeout(lt);st=null});
             pad.addEventListener('keydown',e=>{if(e.key=='Enter'||e.key==' '){e.preventDefault();key('ok')}})}
             function hold(el,fn){let t1,t2;const stop=()=>{clearTimeout(t1);clearInterval(t2);el.classList.remove('down')};
             el.addEventListener('pointerdown',e=>{e.preventDefault();el.classList.add('down');fn();buzz(6);
             t1=setTimeout(()=>{t2=setInterval(fn,160)},450)});
             ['pointerup','pointerleave','pointercancel'].forEach(n=>el.addEventListener(n,stop));
             el.addEventListener('click',e=>{if(e.detail===0)fn()})}
+            let armed;
+            function power(){const b=$('power');if(b.classList.contains('arm')){clearTimeout(armed);b.classList.remove('arm');key('sleep');buzz(20);
+            toast(T('Desligando a tela','Turning the screen off'));return}
+            b.classList.add('arm');buzz(8);toast(T('Toque de novo para desligar a tela','Tap again to turn the screen off'));
+            armed=setTimeout(()=>b.classList.remove('arm'),2500)}
             const ARROWS={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right',Escape:'back',Backspace:'back'};
             document.addEventListener('keydown',e=>{if($('app').hidden||e.target.tagName=='INPUT'||document.querySelector('[data-view=remote]').hidden)return;
             const k=ARROWS[e.key];if(k){e.preventDefault();key(k);if(k!='back')flash(k)}});
@@ -250,6 +309,7 @@ final class WebPages {
             document.querySelectorAll('[data-k]').forEach(b=>{const k=b.dataset.k;
             if(b.hasAttribute('data-rep'))hold(b,()=>key(k));else b.onclick=()=>{key(k);buzz(8)}});
             $('find').onclick=()=>{buzz(8);tab('kbd');$('q').focus()};
+            $('power').onclick=power;
             if(pin){$('pin').value=pin;connect()}else showLogin()});
             """;
 

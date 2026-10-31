@@ -7,6 +7,7 @@ import java.util.List;
 /** Regras puras do controle pelo celular: URL do QR com o PIN, teclas de mídia, validação e JSON da lista de apps. */
 final class RemoteApi {
     static final int MAX_SEARCH = 200;
+    static final int MAX_NAME = 40;
 
     private RemoteApi() { }
 
@@ -41,6 +42,35 @@ final class RemoteApi {
         String t = body.trim();
         if (t.isEmpty() || t.length() > MAX_SEARCH || t.indexOf('\n') >= 0 || t.indexOf('\r') >= 0) return null;
         return t;
+    }
+
+    /**
+     * O nome da TV: o primeiro não vazio entre device_name, bluetooth_name e o modelo, sem caracteres de
+     * controle e com até 40 caracteres. "TV" se nenhum serve.
+     */
+    static String tvName(String... candidates) {
+        for (String c : candidates) {
+            if (c == null) continue;
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < c.length(); i++) {
+                char ch = c.charAt(i);
+                sb.append(Character.isISOControl(ch) || ch == 0x2028 || ch == 0x2029 ? ' ' : ch);
+            }
+            String t = sb.toString().trim().replaceAll(" +", " ");
+            if (t.isEmpty()) continue;
+            return t.length() > MAX_NAME ? t.substring(0, MAX_NAME).trim() : t;
+        }
+        return "TV";
+    }
+
+    /** {"name":"Quarto","keys":["input","sleep"]}: o nome da TV e os botões extras que esta TV aceita. */
+    static String infoJson(String name, List<String> keys) {
+        StringBuilder sb = new StringBuilder("{\"name\":").append(json(name)).append(",\"keys\":[");
+        for (int i = 0; i < keys.size(); i++) {
+            if (i > 0) sb.append(',');
+            sb.append(json(keys.get(i)));
+        }
+        return sb.append("]}").toString();
     }
 
     /** [{"p":"pacote","n":"nome"}, ...] a partir de pares {pacote, nome}. */
