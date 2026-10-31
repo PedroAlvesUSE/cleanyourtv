@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * On-TV wallpaper from image URLs. One URL per line in launcher settings; each download lands in the
@@ -33,9 +34,10 @@ final class WallpaperUrls {
     private static final String TAG = "TvHome.WallpaperUrl";
     private static final String DIR = "wallpaper_url";
     private static final int MAX_URLS = 6;
-    private static final int MAX_BYTES = 4 * 1024 * 1024;
-    /** Teto total do cache em disco; acima disso apaga os ficheiros mais antigos. */
-    private static final long MAX_CACHE_BYTES = 12L * 1024 * 1024;
+    /** Maior imagem aceita (12 MB): fotos 4K em JPEG passam de 4 MB com facilidade. */
+    static final int MAX_BYTES = 12 * 1024 * 1024;
+    /** Teto total do cache em disco (48 MB); acima disso apaga os ficheiros mais antigos. */
+    static final long MAX_CACHE_BYTES = 48L * 1024 * 1024;
     /** Ficheiros mais velhos que isto são apagados (7 dias). */
     private static final long MAX_AGE_MS = 7L * 24 * 60 * 60 * 1000;
     private static final int CONNECT_MS = 12_000;
@@ -152,7 +154,16 @@ final class WallpaperUrls {
     }
 
     static File fileFor(Context ctx, String url) {
-        return new File(cacheDir(ctx), hash(url) + ".img");
+        return fileIn(cacheDir(ctx), url);
+    }
+
+    static File fileIn(File dir, String url) {
+        return new File(dir, hash(url) + ".img");
+    }
+
+    /** Baixa uma URL para um ficheiro; devolve null em caso de sucesso ou um erro curto. */
+    interface Downloader {
+        String download(String url, File dest);
     }
 
     /** Cached files for the saved URL list, in list order; missing downloads are skipped. */
@@ -175,18 +186,34 @@ final class WallpaperUrls {
         if (urls.isEmpty()) return "empty";
         deleteOrphans(ctx, urls);
         pruneExpired(ctx);
+        String err = downloadInto(urls, cacheDir(ctx), (url, dest) -> downloadOne(url, dest, null));
+        pruneToBudget(cacheDir(ctx), MAX_CACHE_BYTES);
+        return cachedFiles(ctx).isEmpty() ? (err != null ? err : "empty") : null;
+    }
+
+    /**
+     * Baixa cada URL que ainda não está em {@code dir}. Uma falha não interrompe: segue para a próxima URL.
+     * Devolve null se ao menos uma imagem ficou no cache; senão, o primeiro erro.
+     */
+    static String downloadInto(List<String> urls, File dir, Downloader downloader) {
+        int ok = 0;
+        String firstError = null;
         for (String url : urls) {
-            File dest = fileFor(ctx, url);
-            if (dest.isFile() && dest.length() > 0) continue;
-            String err = downloadOne(url, dest);
+            File dest = fileIn(dir, url);
+            if (dest.isFile() && dest.length() > 0) {
+                ok++;
+                continue;
+            }
+            String err = downloader.download(url, dest);
             if (err != null) {
                 // noinspection ResultOfMethodCallIgnored
                 dest.delete();
-                return err;
+                if (firstError == null) firstError = err;
+                continue;
             }
+            ok++;
         }
-        pruneToBudget(ctx);
-        return cachedFiles(ctx).isEmpty() ? "empty" : null;
+        return ok > 0 ? null : (firstError != null ? firstError : "empty");
     }
 
     static void deleteCache(Context ctx) {
@@ -206,7 +233,7 @@ final class WallpaperUrls {
     static void prune(Context ctx) {
         deleteOrphans(ctx, parse(saved(ctx)));
         pruneExpired(ctx);
-        pruneToBudget(ctx);
+        pruneToBudget(cacheDir(ctx), MAX_CACHE_BYTES);
     }
 
     private static void deleteOrphans(Context ctx, List<String> urls) {
@@ -236,8 +263,8 @@ final class WallpaperUrls {
     }
 
     /** Se o cache passar do teto, apaga os ficheiros mais antigos primeiro. */
-    private static void pruneToBudget(Context ctx) {
-        File[] files = cacheDir(ctx).listFiles();
+    static void pruneToBudget(File dir, long budget) {
+        File[] files = dir.listFiles();
         if (files == null || files.length == 0) return;
         long total = 0;
         List<File> imgs = new ArrayList<>();
@@ -246,16 +273,16 @@ final class WallpaperUrls {
             imgs.add(f);
             total += f.length();
         }
-        if (total <= MAX_CACHE_BYTES) return;
+        if (total <= budget) return;
         Collections.sort(imgs, (a, b) -> Long.compare(a.lastModified(), b.lastModified()));
         for (File f : imgs) {
-            if (total <= MAX_CACHE_BYTES) break;
+            if (total <= budget) break;
             long size = f.length();
             if (f.delete()) total -= size;
         }
     }
 
-    private static String downloadOne(String url, File dest) {
+    static String downloadOne(String url, File dest, Map<String, String> headers) {
         HttpURLConnection conn = null;
         File partial = new File(dest.getPath() + ".part");
         try {
@@ -264,6 +291,9 @@ final class WallpaperUrls {
             conn.setReadTimeout(READ_MS);
             conn.setInstanceFollowRedirects(true);
             conn.setRequestProperty("User-Agent", "CleanYourTV-Wallpaper/1");
+            if (headers != null) {
+                for (Map.Entry<String, String> h : headers.entrySet()) conn.setRequestProperty(h.getKey(), h.getValue());
+            }
             int code = conn.getResponseCode();
             if (code < 200 || code >= 300) return "http " + code;
             String type = conn.getContentType();
@@ -292,7 +322,7 @@ final class WallpaperUrls {
             }
             return null;
         } catch (IOException e) {
-            Log.w(TAG, "download failed: " + url, e);
+            warn("download failed: " + url, e);
             return "download failed";
         } finally {
             // noinspection ResultOfMethodCallIgnored
@@ -301,7 +331,16 @@ final class WallpaperUrls {
         }
     }
 
-    private static String hash(String url) {
+    /** Log.w que nunca lança: no teste JVM o android.jar não tem Log. */
+    private static void warn(String message, Throwable error) {
+        try {
+            Log.w(TAG, message, error);
+        } catch (Throwable ignored) {
+            // teste JVM
+        }
+    }
+
+    static String hash(String url) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
             byte[] dig = md.digest(url.getBytes(StandardCharsets.UTF_8));

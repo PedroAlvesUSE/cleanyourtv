@@ -31,6 +31,12 @@ public final class WallpaperProviders {
      */
     public static Map<String, WallpaperProvider> create(CatalogCache cache, String nasaKey, String unsplashKey,
                                                         String pexelsKey) {
+        return create(cache, nasaKey, unsplashKey, pexelsKey, null);
+    }
+
+    /** As above; a non-empty {@code wallhavenQuery} makes Wallhaven search that holiday term. */
+    public static Map<String, WallpaperProvider> create(CatalogCache cache, String nasaKey, String unsplashKey,
+                                                        String pexelsKey, String wallhavenQuery) {
         List<WallpaperProvider> list = new ArrayList<>();
         list.add(new BingProvider());
         list.add(PeapixProvider.bing());
@@ -41,7 +47,7 @@ public final class WallpaperProviders {
         list.add(new EarthViewProvider(cache));
         list.add(new WikimediaProvider());
         list.add(new NasaApodProvider(nasaKey));
-        list.add(new WallhavenProvider());
+        list.add(new WallhavenProvider(wallhavenQuery));
         list.add(RedditProvider.earthPorn());
         list.add(RedditProvider.wallpapers());
         list.add(RedditProvider.amoledBackgrounds());
@@ -58,7 +64,13 @@ public final class WallpaperProviders {
     /** An aggregator on the real network; the catalogs are cached in {@code catalogDir} (may be null). */
     public static WallpaperAggregator newAggregator(File catalogDir, String nasaKey, String unsplashKey,
                                                     String pexelsKey) {
+        return newAggregator(catalogDir, nasaKey, unsplashKey, pexelsKey, null);
+    }
+
+    public static WallpaperAggregator newAggregator(File catalogDir, String nasaKey, String unsplashKey,
+                                                    String pexelsKey, String wallhavenQuery) {
         CatalogCache cache = catalogDir == null ? null : new CatalogCache(catalogDir);
-        return new WallpaperAggregator(create(cache, nasaKey, unsplashKey, pexelsKey), new UrlConnectionHttp());
+        return new WallpaperAggregator(create(cache, nasaKey, unsplashKey, pexelsKey, wallhavenQuery),
+                new UrlConnectionHttp());
     }
 }

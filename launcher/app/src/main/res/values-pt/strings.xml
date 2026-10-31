@@ -213,4 +213,16 @@
     <string name="set_license_d">Livre e de código aberto.</string>
     <string name="set_project">Projeto</string>
     <string name="set_project_d">Código-fonte, ajuda e temas.</string>
+    <string name="set_src_order">Ordem das fontes</string>
+    <string name="set_src_order_d">Escolha quais fontes usar e em que ordem. Segure OK numa fonte para movê-la com cima e baixo.</string>
+    <string name="set_src_item_d">Pressione OK para ligar ou desligar esta fonte. Segure OK para movê-la com cima e baixo.</string>
+    <string name="set_src_key_d">Esta fonte precisa de chave. Informe \"%1$s\" no config.json para usá-la.</string>
+    <string name="set_src_nokey">Sem chave</string>
+    <string name="set_src_moving">Mover: ↑ ↓</string>
+    <string name="set_diag_view">Resultado da última busca</string>
+    <string name="set_diag_view_d">Mostra, para cada fonte, se a última busca 4K funcionou.</string>
+    <string name="diag_ok">ok</string>
+    <string name="diag_err">erro</string>
+    <string name="diag_none">Nenhuma busca registrada ainda.</string>
+    <string name="diag_off">Ligue antes o diagnóstico das fontes.</string>
 </resources>

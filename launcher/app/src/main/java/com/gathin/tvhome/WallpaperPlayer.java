@@ -4,6 +4,11 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.view.Gravity;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.DisplayMetrics;
@@ -16,6 +21,7 @@ import android.widget.ImageView;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -24,6 +30,8 @@ import java.util.concurrent.Executors;
 final class WallpaperPlayer {
     /** Poll no slower than once a minute when the interval is long. */
     private static final long MAX_POLL_MS = 60_000L;
+    private static final long CREDIT_SHOW_MS = 8_000L;
+    private static final int CREDIT_FADE_MS = 300;
 
     private final FrameLayout root;
     private final ImageView image;
@@ -40,6 +48,13 @@ final class WallpaperPlayer {
     private final String transition;
     private final int transitionMs;
     private final boolean animateTransitions;
+    /** Credit overlay (wallpaper_credit); null when the function is off. */
+    private final LinearLayout creditLayer;
+    private final TextView creditTitle;
+    private final TextView creditLine;
+    private final Context context;
+    private Map<String, String[]> credits = java.util.Collections.emptyMap();
+    private boolean built;
     private boolean active;
     private boolean closed;
     private boolean loading;
@@ -55,8 +70,19 @@ final class WallpaperPlayer {
         }
     };
 
+    private final Runnable hideCredit = new Runnable() {
+        @Override
+        public void run() {
+            if (creditLayer == null) return;
+            creditLayer.animate().cancel();
+            creditLayer.animate().alpha(0f).setDuration(CREDIT_FADE_MS)
+                    .withEndAction(() -> creditLayer.setVisibility(View.GONE)).start();
+        }
+    };
+
     WallpaperPlayer(Context context, FrameLayout root, Config config) {
         this.root = root;
+        this.context = context;
         files = new ArrayList<>(config.wallpapers);
         interval = config.wallpaperRotationSeconds * 1000L;
         preferences = context.getSharedPreferences("wallpaper_rotation", Context.MODE_PRIVATE);
@@ -72,7 +98,12 @@ final class WallpaperPlayer {
         imageAlt = newImage(context);
         imageAlt.setAlpha(0f);
         front = image;
+        boolean credit = config.wallpaperEnabled && !files.isEmpty() && config.feature("wallpaper_credit");
+        creditLayer = credit ? new LinearLayout(context) : null;
+        creditTitle = credit ? new TextView(context) : null;
+        creditLine = credit ? new TextView(context) : null;
         if (config.wallpaperEnabled && !files.isEmpty()) {
+            built = true;
             int insert = 0;
             root.addView(image, insert++, new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -88,8 +119,78 @@ final class WallpaperPlayer {
                 root.addView(shade, insert, new FrameLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
             }
+            if (credit) {
+                buildCreditLayer(metrics.density);
+                credits = SourcesWallpaper.credits(context);
+                // The layer goes over everything else on Home: a short-lived caption, not focusable.
+                root.addView(creditLayer, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                        (int) (200 * metrics.density), Gravity.BOTTOM | Gravity.START));
+            }
             showFirst();
         }
+    }
+
+    /** True when Home has a picture to show; false when the plain colour is all there is. */
+    boolean hasPictures() {
+        return built;
+    }
+
+    /**
+     * New pictures of the daily search: swaps the list and shows one of them with the usual transition. Main
+     * thread only.
+     */
+    void reload(List<File> fresh) {
+        if (closed || !built || fresh.isEmpty()) return;
+        files.clear();
+        files.addAll(fresh);
+        if (creditLayer != null) credits = SourcesWallpaper.credits(context);
+        preferences.edit().remove("image").remove("changed").apply();
+        update();
+    }
+
+    /** Title and credit in white (#F5F5F7) with a shadow, over a dark gradient for contrast. */
+    private void buildCreditLayer(float density) {
+        creditLayer.setOrientation(LinearLayout.VERTICAL);
+        creditLayer.setGravity(Gravity.BOTTOM | Gravity.START);
+        creditLayer.setPadding((int) (48 * density), 0, (int) (48 * density), (int) (36 * density));
+        creditLayer.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{0x00000000, 0x99000000}));
+        creditLayer.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        creditLayer.setVisibility(View.GONE);
+        creditLayer.setAlpha(0f);
+        creditTitle.setTextColor(0xFFF5F5F7);
+        creditTitle.setTextSize(22);
+        creditTitle.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        creditTitle.setMaxLines(1);
+        creditTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        creditTitle.setShadowLayer(6 * density, 0, 2 * density, 0xCC000000);
+        creditLine.setTextColor(0xFFF5F5F7);
+        creditLine.setTextSize(15);
+        creditLine.setMaxLines(1);
+        creditLine.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        creditLine.setShadowLayer(6 * density, 0, 2 * density, 0xCC000000);
+        creditLayer.addView(creditTitle);
+        creditLayer.addView(creditLine);
+    }
+
+    /** Shows the title and credit of {@code file} for 8 s, fading in and out in 300 ms; nothing for a file without them. */
+    private void showCredit(File file) {
+        if (creditLayer == null || closed) return;
+        handler.removeCallbacks(hideCredit);
+        String[] c = credits.get(file.getName());
+        if (c == null || (c[0].isEmpty() && c[1].isEmpty())) {
+            creditLayer.animate().cancel();
+            creditLayer.setVisibility(View.GONE);
+            return;
+        }
+        creditTitle.setText(c[0]);
+        creditTitle.setVisibility(c[0].isEmpty() ? View.GONE : View.VISIBLE);
+        creditLine.setText(c[1]);
+        creditLine.setVisibility(c[1].isEmpty() ? View.GONE : View.VISIBLE);
+        creditLayer.animate().cancel();
+        creditLayer.setVisibility(View.VISIBLE);
+        creditLayer.animate().alpha(1f).setDuration(CREDIT_FADE_MS).start();
+        handler.postDelayed(hideCredit, CREDIT_SHOW_MS);
     }
 
     private static ImageView newImage(Context context) {
@@ -114,6 +215,7 @@ final class WallpaperPlayer {
                 front.setImageBitmap(bitmap);
                 rememberShown(bitmap);
                 displayed = first.getName();
+                showCredit(first);
                 if (!displayed.equals(previous)) {
                     preferences.edit().putString("image", displayed)
                             .putLong("changed", System.currentTimeMillis()).apply();
@@ -135,12 +237,18 @@ final class WallpaperPlayer {
     void stop() {
         active = false;
         handler.removeCallbacks(poll);
+        handler.removeCallbacks(hideCredit);
+        if (creditLayer != null) {
+            creditLayer.animate().cancel();
+            creditLayer.setVisibility(View.GONE);
+        }
     }
 
     void close() {
         active = false;
         closed = true;
         handler.removeCallbacks(poll);
+        handler.removeCallbacks(hideCredit);
         image.animate().cancel();
         imageAlt.animate().cancel();
         decoder.shutdownNow();
@@ -177,6 +285,7 @@ final class WallpaperPlayer {
                     update();
                     return;
                 }
+                showCredit(next);
                 applyBitmap(bitmap, () -> {
                     rememberShown(bitmap);
                     displayed = next.getName();

@@ -610,6 +610,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (showStats) startStats();
         sky.update();
         wallpaperPlayer.start();
+        // 4K sources: when the day changed since the last search, search in the background and swap the picture.
+        SourcesWallpaper.refreshIfDue(this, this::onSourcesRefreshed);
         handler.postDelayed(minuteTick, MINUTE_MS);
         if (festive && diya != null) {
             diya.start();
@@ -619,6 +621,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 handler.postDelayed(this::playPetalShower, 450);
             }
         }
+    }
+
+    /** The daily search finished: crossfade to one of the new pictures, or rebuild Home if it had none. */
+    private void onSourcesRefreshed() {
+        if (isFinishing() || isDestroyed()) return;
+        List<File> fresh = SourcesWallpaper.cachedFiles(this);
+        if (fresh.isEmpty()) return;
+        if (wallpaperPlayer.hasPictures()) wallpaperPlayer.reload(fresh);
+        else recreate();
     }
 
     @Override

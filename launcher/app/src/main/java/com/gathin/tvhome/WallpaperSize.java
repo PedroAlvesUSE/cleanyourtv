@@ -7,8 +7,8 @@ package com.gathin.tvhome;
 final class WallpaperSize {
     private WallpaperSize() { }
 
-    /** 4K UHD (3840x2160, 8.3 M pixels) and a little more; anything bigger is refused. */
-    static final long MAX_PIXELS = 8_400_000L;
+    /** 4K UHD (3840x2160, 8.3 M pixels) plus 10 %; anything bigger is refused. The decode scales it down. */
+    static final long MAX_PIXELS = 9_130_000L;
 
     static boolean accepted(int width, int height) {
         return width > 0 && height > 0 && (long) width * height <= MAX_PIXELS;

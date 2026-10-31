@@ -17,6 +17,18 @@ public class WallpaperSizeTest {
         assertTrue(WallpaperSize.accepted(1920, 1080));
     }
 
+    @Test public void aBitMoreThanFourKIsAcceptedButNotAnEightKPicture() {
+        assertTrue(WallpaperSize.accepted(4096, 2160));
+        assertTrue(WallpaperSize.accepted(3840, 2300));
+        assertFalse(WallpaperSize.accepted(5120, 2880));
+        assertFalse(WallpaperSize.accepted(7680, 4320));
+    }
+
+    @Test public void fourKOnA4KScreenDecodesWithoutSampling() {
+        assertEquals(1, WallpaperSize.sampleSize(3840, 2160, 3840, 2160));
+        assertNull(WallpaperSize.coverScale(3840, 2160, 3840, 2160));
+    }
+
     @Test public void unreadablePictureIsRefused() {
         assertFalse(WallpaperSize.accepted(-1, -1));
         assertFalse(WallpaperSize.accepted(0, 1080));

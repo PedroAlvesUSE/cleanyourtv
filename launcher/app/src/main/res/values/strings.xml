@@ -231,4 +231,16 @@
     <string name="set_license_d">Free and open source.</string>
     <string name="set_project">Project</string>
     <string name="set_project_d">Source code, help and themes.</string>
+    <string name="set_src_order">Source order</string>
+    <string name="set_src_order_d">Choose which sources to use and in which order. Hold OK on a source to move it with up and down.</string>
+    <string name="set_src_item_d">Press OK to turn this source on or off. Hold OK to move it with up and down.</string>
+    <string name="set_src_key_d">This source needs a key. Add \"%1$s\" to config.json to use it.</string>
+    <string name="set_src_nokey">No key</string>
+    <string name="set_src_moving">Move: ↑ ↓</string>
+    <string name="set_diag_view">Last search result</string>
+    <string name="set_diag_view_d">Shows, for each source, whether the last 4K search worked.</string>
+    <string name="diag_ok">ok</string>
+    <string name="diag_err">error</string>
+    <string name="diag_none">No search recorded yet.</string>
+    <string name="diag_off">Turn on source diagnostics first.</string>
 </resources>

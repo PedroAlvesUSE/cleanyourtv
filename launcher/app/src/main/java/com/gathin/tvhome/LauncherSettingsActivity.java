@@ -25,6 +25,7 @@ import android.text.InputType;
 import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewOutlineProvider;
@@ -74,16 +75,28 @@ public final class LauncherSettingsActivity extends Activity {
         final SettingRow row;
         final String label;
         final Object value;
+        /** The 4K source this line stands for (SOURCES screen), else null. */
+        final String source;
 
         Item(SettingRow row, String label, Object value) {
+            this(row, label, value, null);
+        }
+
+        Item(SettingRow row, String label, Object value, String source) {
             this.row = row;
             this.label = label;
             this.value = value;
+            this.source = source;
         }
     }
 
     private SharedPreferences choices;
     private Config config;
+    private WallpaperSources.Keys keys;
+    /** Position of the source being moved with the arrows (long press on OK), or -1. */
+    private int grabbed = -1;
+    /** The key whose release must not reach the row, because its press already ended the move. */
+    private int swallowUpKey = -1;
     private float dp;
     /** False when the TV's animator scale is off: every change then snaps. */
     private boolean motion;
@@ -119,6 +132,7 @@ public final class LauncherSettingsActivity extends Activity {
         motion = ValueAnimator.areAnimatorsEnabled();
         choices = getSharedPreferences(Config.SETTINGS_NAME, MODE_PRIVATE);
         config = Config.load(this);
+        keys = SourcesWallpaper.keys(this);
         setContentView(buildLayout());
         path.add(SettingsCatalog.ROOT);
         origins.add(0);
@@ -271,7 +285,14 @@ public final class LauncherSettingsActivity extends Activity {
     private void fill(int focus) {
         SettingRow screen = screen();
         items.clear();
-        if (screen.type == SettingsCatalog.CHOICE) {
+        grabbed = -1;
+        swallowUpKey = -1;
+        if (screen.type == SettingsCatalog.SOURCES) {
+            for (String id : WallpaperSources.order(choices.getString(WallpaperSources.ORDER_KEY, null))) {
+                items.add(new Item(screen, null, null, id));
+            }
+            if (focus < 0) focus = 0;
+        } else if (screen.type == SettingsCatalog.CHOICE) {
             items.addAll(options(screen));
             if (focus < 0) {
                 focus = 0;
@@ -323,6 +344,7 @@ public final class LauncherSettingsActivity extends Activity {
 
     /** Advanced effects cannot be on without animations: the row is dimmed and OK does nothing. */
     private boolean dim(Item it) {
+        if (it.source != null) return WallpaperSources.unavailable(it.source, keys);
         return it.label == null && Config.FEATURE_ADVANCED_EFFECTS.equals(it.row.key) && !isOn(Config.FEATURE_ANIMATIONS);
     }
 
@@ -331,13 +353,25 @@ public final class LauncherSettingsActivity extends Activity {
         return choices.contains(key) ? choices.getBoolean(key, false) : config.feature(key);
     }
 
+    private boolean sourceOn(String id) {
+        return WallpaperSources.enabled(id, choices.getString(WallpaperSources.STATE_KEY, null), keys);
+    }
+
     /** The grey text at the end of a row. */
     private String valueOf(Item it) {
         SettingRow row = it.row;
+        if (it.source != null) {
+            if (grabbed >= 0 && grabbed < items.size() && items.get(grabbed) == it) return getString(R.string.set_src_moving);
+            if (WallpaperSources.unavailable(it.source, keys)) return getString(R.string.set_src_nokey);
+            return getString(sourceOn(it.source) ? R.string.on : R.string.off);
+        }
         if (it.label != null) return checked(it) ? "✓" : "";
         switch (row.type) {
             case SettingsCatalog.BOOL:
                 return getString(isOn(row.key) ? R.string.on : R.string.off);
+            case SettingsCatalog.SOURCES:
+                return String.valueOf(WallpaperSources.active(choices.getString(WallpaperSources.ORDER_KEY, null),
+                        choices.getString(WallpaperSources.STATE_KEY, null), keys).size());
             case SettingsCatalog.CHOICE:
                 for (Item option : options(row)) if (checked(option)) return option.label;
                 if (SettingsCatalog.WALLPAPER.equals(row.key)) return choices.getString(row.key, "");
@@ -378,6 +412,7 @@ public final class LauncherSettingsActivity extends Activity {
                 out.add(new Item(row, f.getName(), f.getName()));
             }
             if (isOn(Config.FEATURE_BING)) out.add(new Item(row, getString(R.string.wallpaper_bing), BingWallpaper.CHOICE));
+            out.add(new Item(row, getString(R.string.set_sources), SourcesWallpaper.CHOICE));
             String url = getString(R.string.wallpaper_from_url);
             if (WallpaperUrls.CHOICE.equals(choices.getString(key, null))) {
                 url = getString(R.string.wallpaper_url_state, WallpaperUrls.parse(WallpaperUrls.saved(this)).size());
@@ -410,7 +445,9 @@ public final class LauncherSettingsActivity extends Activity {
         Object current;
         if (SettingsCatalog.WALLPAPER.equals(key)) {
             String choice = choices.getString(key, null);
-            current = BingWallpaper.CHOICE.equals(choice) && !isOn(Config.FEATURE_BING) ? null : choice;
+            boolean off = BingWallpaper.CHOICE.equals(choice) && !isOn(Config.FEATURE_BING)
+                    || SourcesWallpaper.CHOICE.equals(choice) && !isOn(SourcesWallpaper.FEATURE);
+            current = off ? null : choice;
         } else if (SettingsCatalog.ROTATION.equals(key)) {
             current = choices.contains(key) ? choices.getInt(key, 0) : -1;
         } else if (SettingsCatalog.TRANSITION.equals(key)) {
@@ -431,6 +468,10 @@ public final class LauncherSettingsActivity extends Activity {
         if (moving || position < 0 || position >= items.size()) return;
         Item it = items.get(position);
         SettingRow row = it.row;
+        if (it.source != null) {
+            toggleSource(it.source);
+            return;
+        }
         if (it.label != null) {
             pick(it);
             return;
@@ -438,6 +479,7 @@ public final class LauncherSettingsActivity extends Activity {
         switch (row.type) {
             case SettingsCatalog.SUBSCREEN:
             case SettingsCatalog.CHOICE:
+            case SettingsCatalog.SOURCES:
                 open(row, position);
                 break;
             case SettingsCatalog.BOOL:
@@ -446,9 +488,13 @@ public final class LauncherSettingsActivity extends Activity {
                 SharedPreferences.Editor edit = choices.edit().putBoolean(row.key, on);
                 // Advanced effects need animations; switching those off switches both off, as before.
                 if (Config.FEATURE_ANIMATIONS.equals(row.key) && !on) edit.putBoolean(Config.FEATURE_ADVANCED_EFFECTS, false);
+                boolean sourcesKey = SourcesWallpaper.FEATURE.equals(row.key);
+                // A new search on the next Home start picks up the change.
+                if (sourcesKey || "seasonal_wallpaper".equals(row.key)) edit.remove(SourcesWallpaper.DATE_KEY);
                 edit.apply();
-                // Bing off drops a Bing wallpaper, so the preview and backdrop need the new Config.
-                changed(Config.FEATURE_BING.equals(row.key));
+                if (sourcesKey && !on) SourcesWallpaper.deleteCache(this);
+                // Bing or the 4K sources off drop their wallpaper, so the preview and backdrop need the new Config.
+                changed(Config.FEATURE_BING.equals(row.key) || sourcesKey);
                 break;
             default:
                 action(row.key);
@@ -467,10 +513,17 @@ public final class LauncherSettingsActivity extends Activity {
             if (v == null) {
                 edit.remove(key).remove(WallpaperUrls.URLS_KEY).apply();
                 WallpaperUrls.deleteCache(this);
+            } else if (SourcesWallpaper.CHOICE.equals(v)) {
+                // Picking the 4K sources switches the function on and drops the other remote cache.
+                edit.putString(key, (String) v).putBoolean(SourcesWallpaper.FEATURE, true)
+                        .remove(WallpaperUrls.URLS_KEY).remove(SourcesWallpaper.DATE_KEY).apply();
+                WallpaperUrls.deleteCache(this);
             } else {
                 edit.putString(key, (String) v).apply();
             }
+            if (!SourcesWallpaper.CHOICE.equals(v)) SourcesWallpaper.deleteCache(this);
             if (BingWallpaper.CHOICE.equals(v)) download(BingWallpaper::fetchAndCache);
+            else if (SourcesWallpaper.CHOICE.equals(v)) download(SourcesWallpaper::fetchAndCache);
             else Toast.makeText(this, R.string.wallpaper_applied, Toast.LENGTH_SHORT).show();
             changed(true);
         } else {
@@ -491,13 +544,7 @@ public final class LauncherSettingsActivity extends Activity {
     private void changed(boolean reload) {
         setResult(RESULT_OK);
         if (reload) config = Config.load(this);
-        for (int i = 0; i < list.getChildCount(); i++) {
-            RecyclerView.ViewHolder h = list.getChildViewHolder(list.getChildAt(i));
-            int p = h.getBindingAdapterPosition();
-            if (p < 0 || p >= items.size()) continue;
-            ((Rows.Holder) h).value(valueOf(items.get(p)), true);
-            h.itemView.setAlpha(dim(items.get(p)) ? 0.45f : 1f);
-        }
+        refreshRows();
         if (reload) {
             artShown = null;
             View f = list.getFocusedChild();
@@ -506,11 +553,111 @@ public final class LauncherSettingsActivity extends Activity {
         }
     }
 
+    /** The visible rows show their current value again. */
+    private void refreshRows() {
+        for (int i = 0; i < list.getChildCount(); i++) {
+            RecyclerView.ViewHolder h = list.getChildViewHolder(list.getChildAt(i));
+            int p = h.getBindingAdapterPosition();
+            if (p < 0 || p >= items.size()) continue;
+            ((Rows.Holder) h).value(valueOf(items.get(p)), true);
+            h.itemView.setAlpha(dim(items.get(p)) ? 0.45f : 1f);
+        }
+    }
+
+    /** OK on a source: on or off. A source without its key cannot be switched on. */
+    private void toggleSource(String id) {
+        if (WallpaperSources.unavailable(id, keys)) {
+            Toast.makeText(this, getString(R.string.set_src_key_d, WallpaperSources.keyName(id)), Toast.LENGTH_LONG).show();
+            return;
+        }
+        String states = WallpaperSources.withState(choices.getString(WallpaperSources.STATE_KEY, null), id, !sourceOn(id));
+        choices.edit().putString(WallpaperSources.STATE_KEY, states).remove(SourcesWallpaper.DATE_KEY).apply();
+        changed(false);
+    }
+
+    /** Long press on OK: the source follows the up and down keys until OK or Back. */
+    private boolean grab(int position) {
+        if (position < 0 || position >= items.size() || items.get(position).source == null) return false;
+        grabbed = position;
+        refreshRows();
+        return true;
+    }
+
+    private void moveGrabbed(int delta) {
+        int from = grabbed;
+        int to = from + delta;
+        if (from < 0 || to < 0 || to >= items.size()) return;
+        items.add(to, items.remove(from));
+        adapter.notifyItemMoved(from, to);
+        grabbed = to;
+        List<String> order = new ArrayList<>();
+        for (Item item : items) order.add(item.source);
+        choices.edit().putString(WallpaperSources.ORDER_KEY, WallpaperSources.joinOrder(order))
+                .remove(SourcesWallpaper.DATE_KEY).apply();
+        setResult(RESULT_OK);
+        list.scrollToPosition(to);
+        list.post(() -> {
+            RecyclerView.ViewHolder h = list.findViewHolderForAdapterPosition(to);
+            if (h != null) h.itemView.requestFocus();
+            refreshRows();
+        });
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        int code = event.getKeyCode();
+        if (event.getAction() == KeyEvent.ACTION_UP && code == swallowUpKey) {
+            swallowUpKey = -1;
+            return true;
+        }
+        if (grabbed >= 0 && event.getAction() == KeyEvent.ACTION_DOWN) {
+            if (code == KeyEvent.KEYCODE_DPAD_UP || code == KeyEvent.KEYCODE_DPAD_DOWN) {
+                moveGrabbed(code == KeyEvent.KEYCODE_DPAD_UP ? -1 : 1);
+                return true;
+            }
+            if (code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER || code == KeyEvent.KEYCODE_BACK) {
+                if (event.getRepeatCount() == 0) {
+                    grabbed = -1;
+                    swallowUpKey = code;
+                    refreshRows();
+                }
+                return true;
+            }
+            if (code == KeyEvent.KEYCODE_DPAD_LEFT || code == KeyEvent.KEYCODE_DPAD_RIGHT) return true;
+        }
+        return super.dispatchKeyEvent(event);
+    }
+
+    /** The result of the last 4K search, one line per source. */
+    private void showDiag() {
+        if (!isOn("wallpaper_diag")) {
+            Toast.makeText(this, R.string.diag_off, Toast.LENGTH_LONG).show();
+            return;
+        }
+        List<String[]> rows = WallpaperSources.parseDiag(choices.getString(SourcesWallpaper.DIAG_KEY, null));
+        StringBuilder text = new StringBuilder();
+        if (rows.isEmpty()) {
+            text.append(getString(R.string.diag_none));
+        } else {
+            text.append(choices.getString(SourcesWallpaper.DIAG_DATE_KEY, ""));
+            for (String[] r : rows) {
+                text.append('\n').append(WallpaperSources.name(r[0])).append(": ")
+                        .append(getString("1".equals(r[1]) ? R.string.diag_ok : R.string.diag_err));
+                if (!r[2].isEmpty()) text.append(" - ").append(r[2]);
+            }
+        }
+        new AlertDialog.Builder(this).setTitle(R.string.set_diag_view).setMessage(text)
+                .setPositiveButton(android.R.string.ok, null).show();
+    }
+
     private void action(String key) {
-        if (SettingsCatalog.FOLLOW_THEME.equals(key)) {
+        if (SettingsCatalog.DIAG_RESULTS.equals(key)) {
+            showDiag();
+        } else if (SettingsCatalog.FOLLOW_THEME.equals(key)) {
             if (!hasOnTvChoices()) return;
             Config.clearOnTvChoices(choices.edit()).commit();
             WallpaperUrls.deleteCache(this);
+            SourcesWallpaper.deleteCache(this);
             changed(true);
         } else if (SettingsCatalog.HOME_PICKER.equals(key)) {
             Toast.makeText(this, R.string.home_settings_help, Toast.LENGTH_LONG).show();
@@ -584,7 +731,8 @@ public final class LauncherSettingsActivity extends Activity {
         return choices.contains(SettingsCatalog.COLUMNS) || choices.contains(Config.ROWS_BELOW_DOCK_KEY)
                 || choices.contains(Config.WALLPAPER_CHOICE_KEY) || choices.contains(WallpaperUrls.URLS_KEY)
                 || choices.contains(Config.WALLPAPER_ROTATION_KEY) || choices.contains(Config.WALLPAPER_TRANSITION_KEY)
-                || choices.contains(Config.DOCK_GLASS_OPACITY_KEY);
+                || choices.contains(Config.DOCK_GLASS_OPACITY_KEY) || choices.contains(WallpaperSources.ORDER_KEY)
+                || choices.contains(WallpaperSources.STATE_KEY);
     }
 
     /** Same order as the Settings button on Home: Fire TV, Android TV settings, then ACTION_SETTINGS. */
@@ -625,11 +773,16 @@ public final class LauncherSettingsActivity extends Activity {
             art = wallpaper;
         }
         showArt(art);
-        String text = getString(row.description);
+        String text = it.source != null ? sourceDescription(it.source) : getString(row.description);
         if (!text.contentEquals(description.getText())) {
             fade(description, () -> description.setText(text));
         }
         soon.setVisibility(row.soon ? View.VISIBLE : View.INVISIBLE);
+    }
+
+    private String sourceDescription(String id) {
+        if (WallpaperSources.unavailable(id, keys)) return getString(R.string.set_src_key_d, WallpaperSources.keyName(id));
+        return getString(R.string.set_src_item_d);
     }
 
     /** The row's own icon, else the icon of the nearest screen above it. */
@@ -799,6 +952,7 @@ public final class LauncherSettingsActivity extends Activity {
                 scaleX = spring(row, DynamicAnimation.SCALE_X);
                 scaleY = spring(row, DynamicAnimation.SCALE_Y);
                 row.setOnClickListener(v -> click(getBindingAdapterPosition()));
+                row.setOnLongClickListener(v -> grab(getBindingAdapterPosition()));
                 row.setOnFocusChangeListener((v, focused) -> {
                     float scale = focused ? 1.03f : 1f;
                     int p = getBindingAdapterPosition();
@@ -864,13 +1018,14 @@ public final class LauncherSettingsActivity extends Activity {
         @Override
         public void onBindViewHolder(Holder h, int position) {
             Item it = items.get(position);
-            h.name.setText(it.label != null ? it.label : getString(it.row.title));
+            h.name.setText(it.source != null ? WallpaperSources.name(it.source)
+                    : it.label != null ? it.label : getString(it.row.title));
             h.value(valueOf(it), false);
             h.value.setTextSize(TypedValue.COMPLEX_UNIT_SP, it.label != null ? 22 : 19);
             // An option's tick is white, a value grey.
             h.value.setTextColor(it.label != null ? TEXT : h.itemView.isFocused() ? 0xFFE5E5EA : TEXT_2);
-            boolean opens = it.label == null
-                    && (it.row.type == SettingsCatalog.SUBSCREEN || it.row.type == SettingsCatalog.CHOICE);
+            boolean opens = it.label == null && it.source == null
+                    && (it.row.type == SettingsCatalog.SOURCES || it.row.type == SettingsCatalog.SUBSCREEN || it.row.type == SettingsCatalog.CHOICE);
             h.chevron.setVisibility(opens ? View.VISIBLE : View.GONE);
             h.itemView.setAlpha(dim(it) ? 0.45f : 1f);
             boolean focused = h.itemView.isFocused();

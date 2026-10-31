@@ -283,7 +283,15 @@ final class Config {
     /** URL / Bing land in {@link WallpaperUrls}' on-device cache. */
     static boolean isCachedWallpaperChoice(String choice) {
         return WallpaperUrls.CHOICE.equals(choice)
-                || BingWallpaper.CHOICE.equals(choice);
+                || BingWallpaper.CHOICE.equals(choice)
+                || SourcesWallpaper.CHOICE.equals(choice);
+    }
+
+    /** An optional API key from config.json (nasa_key, unsplash_key, pexels_key); empty when there is none. */
+    static String apiKey(Context ctx, String name) {
+        File dir = dir(ctx);
+        JSONObject json = read(dir == null ? null : new File(dir, FILE_NAME));
+        return json == null ? "" : string(json, name, "").trim();
     }
 
     static int clampRotationSeconds(int value) {
@@ -426,15 +434,23 @@ final class Config {
         String wallpaperChoice = choices.getString(WALLPAPER_CHOICE_KEY, null);
         // Bing switched off: its cached picture is no longer shown either; the theme decides again.
         if (BingWallpaper.CHOICE.equals(wallpaperChoice) && !features.get(FEATURE_BING)) wallpaperChoice = null;
+        // Same for the 4K sources: with the function off nothing of it is shown or fetched.
+        if (SourcesWallpaper.CHOICE.equals(wallpaperChoice) && !features.get(SourcesWallpaper.FEATURE)) {
+            wallpaperChoice = null;
+        }
         if ("none".equals(wallpaperChoice)) {
             wallpapers.clear();
             wallpaper = null;
             wallpaperEnabled = false;
         } else if (isCachedWallpaperChoice(wallpaperChoice)) {
             // URL / Bing: land in WallpaperUrls' on-device cache.
-            WallpaperUrls.prune(ctx);
             wallpapers.clear();
-            wallpapers.addAll(WallpaperUrls.cachedFiles(ctx));
+            if (SourcesWallpaper.CHOICE.equals(wallpaperChoice)) {
+                wallpapers.addAll(SourcesWallpaper.cachedFiles(ctx));
+            } else {
+                WallpaperUrls.prune(ctx);
+                wallpapers.addAll(WallpaperUrls.cachedFiles(ctx));
+            }
             wallpaper = wallpapers.isEmpty() ? null : wallpapers.get(0);
             wallpaperEnabled = !wallpapers.isEmpty();
             // Multi-image fallback only when the theme left rotation at 0 and the TV pref is unset.
@@ -531,7 +547,9 @@ final class Config {
                 .remove(WALLPAPER_ROTATION_KEY).remove(WALLPAPER_ROTATION_MINUTES_LEGACY)
                 .remove(WALLPAPER_TRANSITION_KEY)
                 .remove(AMBIENT_TINT_KEY).remove(DOCK_GLASS_KEY).remove(DOCK_GLASS_OPACITY_KEY)
-                .remove(WallpaperUrls.URLS_KEY);
+                .remove(WallpaperUrls.URLS_KEY).remove(WallpaperSources.ORDER_KEY)
+                .remove(WallpaperSources.STATE_KEY).remove(SourcesWallpaper.DATE_KEY)
+                .remove(SourcesWallpaper.DIAG_KEY).remove(SourcesWallpaper.DIAG_DATE_KEY);
     }
 
     /** Converte pref antiga em minutos para segundos (uma vez). */

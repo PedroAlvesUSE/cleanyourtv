@@ -10,6 +10,8 @@ final class SettingsCatalog {
     static final int CHOICE = 1;
     static final int ACTION = 2;
     static final int SUBSCREEN = 3;
+    /** The list of 4K sources: one switch per source, reordered with a long press on OK. */
+    static final int SOURCES = 4;
 
     // Keys of the rows that are not feature switches. CHOICE keys are the launcher_settings keys they write.
     static final String WALLPAPER = Config.WALLPAPER_CHOICE_KEY;
@@ -22,6 +24,8 @@ final class SettingsCatalog {
     static final String HOME_PICKER = "home_picker";
     static final String TV_SETTINGS = "tv_settings";
     static final String SCREENSAVER = "screensaver_settings";
+    static final String SOURCES_LIST = "sources_list";
+    static final String DIAG_RESULTS = "diag_results";
     static final String VERSION = "version";
     static final String LICENSE = "license";
     static final String PROJECT = "project";
@@ -66,6 +70,10 @@ final class SettingsCatalog {
         return new SettingRow(title, description, ACTION, key, 0, false);
     }
 
+    private static SettingRow sources(String key, int title, int description) {
+        return new SettingRow(title, description, SOURCES, key, 0, false);
+    }
+
     private static SettingRow screen(int icon, int title, int description, SettingRow... rows) {
         return new SettingRow(title, description, SUBSCREEN, null, icon, false, rows);
     }
@@ -77,9 +85,10 @@ final class SettingsCatalog {
                     choice(ROTATION, R.string.wallpaper_rotation_label, R.string.set_rotation_d),
                     choice(TRANSITION, R.string.wallpaper_transition_label, R.string.set_transition_d),
                     bool(Config.FEATURE_BING, R.string.set_bing, R.string.set_bing_d),
-                    soon("wallpaper_sources", R.string.set_sources, R.string.set_sources_d),
-                    soon("wallpaper_credit", R.string.set_credit, R.string.set_credit_d),
-                    soon("seasonal_wallpaper", R.string.set_seasonal, R.string.set_seasonal_d)),
+                    bool("wallpaper_sources", R.string.set_sources, R.string.set_sources_d),
+                    sources(SOURCES_LIST, R.string.set_src_order, R.string.set_src_order_d),
+                    bool("wallpaper_credit", R.string.set_credit, R.string.set_credit_d),
+                    bool("seasonal_wallpaper", R.string.set_seasonal, R.string.set_seasonal_d)),
             screen(R.drawable.ic_appearance, R.string.set_appearance, R.string.set_appearance_d,
                     soon("apple_style", R.string.set_apple, R.string.set_apple_d),
                     soon("parallax", R.string.set_parallax, R.string.set_parallax_d),
@@ -124,7 +133,8 @@ final class SettingsCatalog {
             screen(R.drawable.ic_settings, R.string.set_system, R.string.set_system_d,
                     soon("tv_panel", R.string.set_panel, R.string.set_panel_d),
                     soon("quick_clean", R.string.set_clean, R.string.set_clean_d),
-                    soon("wallpaper_diag", R.string.set_diag, R.string.set_diag_d),
+                    bool("wallpaper_diag", R.string.set_diag, R.string.set_diag_d),
+                    action(DIAG_RESULTS, R.string.set_diag_view, R.string.set_diag_view_d),
                     soon("config_backup", R.string.set_backup, R.string.set_backup_d),
                     soon("update_badges", R.string.set_updates, R.string.set_updates_d),
                     action(FOLLOW_THEME, R.string.follow_theme, R.string.follow_theme_hint),
