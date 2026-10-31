@@ -70,7 +70,8 @@ public class SettingsCatalogTest {
                 Config.AMBIENT_TINT_KEY, Config.FEATURE_MODULE_CARDS, Config.FEATURE_FILL_DOCK,
                 Config.FEATURE_APP_KEYS, Config.FEATURE_BING, Config.FEATURE_ANIMATIONS,
                 Config.FEATURE_ADVANCED_EFFECTS,
-                "wallpaper_sources", "wallpaper_credit", "wallpaper_diag", "seasonal_wallpaper"}) {
+                "wallpaper_sources", "wallpaper_credit", "wallpaper_diag", "seasonal_wallpaper",
+                Apple.STYLE, Apple.PARALLAX, Apple.TOP_SHELF, Apple.AUTO_ACCENT}) {
             for (SettingRow row : all()) if (built.equals(row.key)) assertFalse(built, row.soon);
         }
     }

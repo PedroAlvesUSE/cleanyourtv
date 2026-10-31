@@ -15,6 +15,7 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.LinearGradient;
+import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.RadialGradient;
 import android.graphics.Rect;
@@ -54,6 +55,7 @@ import android.view.SoundEffectConstants;
 import android.view.ViewGroup;
 import android.view.Window;
 import android.view.animation.AnimationUtils;
+import android.view.animation.DecelerateInterpolator;
 import android.view.animation.LayoutAnimationController;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
@@ -218,6 +220,18 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private AppLibraryDialog appLibrary;
     private boolean libraryFocusPending;
     private RecyclerView.OnScrollListener pendingFocusScroll;
+    /** apple_style: tvOS focus on the tiles (AppleFocus), glass dock bar, system type and a contrast scrim. */
+    private boolean apple;
+    /** auto_accent (with apple_style): the focus shadow and the indicators take the wallpaper's colour. */
+    private boolean autoAccent;
+    /** top_shelf (with apple_style): the focused dock app shown large above the dock; null when off. */
+    private TopShelf shelf;
+    /** Sharper banners for the Top Shelf, loaded the first time each dock app is focused. */
+    private final Map<String, Drawable> shelfBanners = new HashMap<>();
+    private DockDecoration dockDecoration;
+    /** The wallpaper's own dim layer (0–255), repeated over the dock's frosted glass. */
+    private int wallpaperDimAlpha;
+    private final Rect headerRect = new Rect();
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     /** Refreshes the network pill when the connection changes: at boot Wi-Fi often connects after Home is shown. */
@@ -320,7 +334,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         heroMeta = findViewById(R.id.heroMeta);
         heroDots = findViewById(R.id.heroDots);
         heroArt = findViewById(R.id.heroArt);
-        cinematic = cfg.cinematicHome;
+        apple = cfg.feature(Apple.STYLE);
+        autoAccent = apple && cfg.feature(Apple.AUTO_ACCENT);
+        boolean topShelf = apple && cfg.feature(Apple.TOP_SHELF) && cfg.dockRow && cfg.dockTitle;
+        // The Top Shelf replaces the cinematic shelf: both would draw the app's artwork over the wallpaper.
+        cinematic = cfg.cinematicHome && !topShelf;
         ambientTint = cfg.ambientTint;
         dockGlow = cfg.feature(Config.FEATURE_DOCK_GLOW);
         if (cinematic) setUpCinematicShelf();
@@ -328,6 +346,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // still follows the dock.
         if (!cfg.dockTitle) hero.setVisibility(View.GONE);
         greeting = findViewById(R.id.greeting);
+        if (apple) applyAppleType();
         greetingColor = greeting.getCurrentTextColor();
         btnWifi = findViewById(R.id.btnWifi);
         shamsiDate = findViewById(R.id.shamsiDate);
@@ -406,8 +425,24 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             public void onChildViewDetachedFromWindow(@NonNull View v) {
             }
         });
-        if (dockRow) grid.addItemDecoration(
-                new DockDecoration(COLUMNS, density, cfg.dockGlass, cfg.dockGlassOpacity));
+        if (dockRow) {
+            dockDecoration = new DockDecoration(COLUMNS, density, cfg.dockGlass, cfg.dockGlassOpacity, apple);
+            grid.addItemDecoration(dockDecoration);
+        }
+        if (apple) {
+            AppleFocus.accent = 0;
+            View scrim = findViewById(R.id.heroScrim);
+            if (!cinematic) {
+                scrim.setBackground(appleScrim());
+                scrim.setVisibility(View.VISIBLE);
+            }
+            if (topShelf) {
+                shelf = new TopShelf(this, root, scrim, hero,
+                        getResources().getBoolean(R.bool.rtl_menu_bar), rtlAppGrid);
+            }
+            wallpaperDimAlpha = cfg.wallpaperDim > 0 ? cfg.wallpaperDim * 255 / 100 : 0;
+            wallpaperPlayer.setOnShown(this::onWallpaperShown);
+        }
         if (animations) {
             int enterAnim = reducedMotion ? R.anim.tile_enter_reduced : R.anim.tile_enter;
             float enterDelay = reducedMotion ? 0f : 0.06f;
@@ -527,6 +562,21 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 button.setOnFocusChangeListener((view, focused) -> view.animate()
                         .scaleX(focused ? 1.04f : 1f).scaleY(focused ? 1.04f : 1f)
                         .setDuration(160).start());
+            }
+        }
+        if (apple) {
+            for (View button : new View[]{btnInputs, btnWifi, btnReorder, btnSettings}) {
+                button.setOnFocusChangeListener((view, focused) -> {
+                    view.animate().cancel();
+                    float s = focused ? 1.06f : 1f;
+                    if (!Apple.motion(animations)) {
+                        view.setScaleX(s);
+                        view.setScaleY(s);
+                    } else {
+                        view.animate().scaleX(s).scaleY(s).setDuration(focused ? 220 : 140)
+                                .setInterpolator(new DecelerateInterpolator(1.6f)).start();
+                    }
+                });
             }
         }
         if (festive) applyFestiveSkin((TextView) btnInputs, (TextView) btnSettings);
@@ -657,6 +707,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             ambient.setAlpha(0f);
             heroArt.animate().cancel();
             heroArt.setAlpha(0f);
+            if (shelf != null) shelf.reset();
         }
         reloadTiles();
         if (animate && animations && !reducedMotion) grid.scheduleLayoutAnimation();
@@ -691,6 +742,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // An updated app may bring new artwork; the backdrop is cheap to make again.
         heroArtCache.clear();
         heroArtKey = null;
+        shelfBanners.clear();
+        if (shelf != null) shelf.clearCache();
         cards = moduleCards ? CardFeature.run(() -> Cards.discover(this, hiddenApps, Cards.load(Cards.storeFile(this))), none) : none;
         adapter.reload(cards.isEmpty() ? none : CardFeature.run(() -> Cards.shown(cards), none));
         lastFocusedKey = returnKey;
@@ -723,6 +776,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         hero.animate().cancel();
         ambient.animate().cancel();
         heroArt.animate().cancel();
+        if (shelf != null) shelf.settle();
         handler.removeCallbacks(minuteTick);
         stopStats();
         if (diya != null) diya.stop();
@@ -966,6 +1020,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         reordering = false;
         adapter.setReordering(false);
         glass.setAccent(festive ? festival.accentColor() : 0);
+        if (apple) hideGlass();   // the glass only marks reorder mode in the Apple look
         btnReorder.setActivated(false);
         List<String> keys = adapter.movableKeys();
         List<String> before = orderAtStart;
@@ -1098,6 +1153,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         float x = r.exactCenterX() - w / 2f;
         float y = r.exactCenterY() - h / 2f - (advancedEffects ? 4f * density : 0f);
 
+        if (apple && !reordering) {
+            // tvOS has no highlight frame: the tile's own focus (AppleFocus) shows where focus is.
+            hideGlass();
+        } else {
         ViewGroup.LayoutParams lp = glass.getLayoutParams();
         if (lp.width != (int) w || lp.height != (int) h || card.getWidth() != glassCardW) {
             lp.width = (int) w;
@@ -1134,6 +1193,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             springX.animateToFinalPosition(x);
             springY.animateToFinalPosition(y - glassScrollShift);
         }
+        }
         View item = (View) card.getParent();
         if (dockRow && position < COLUMNS) {
             // Dock: park it at the bottom of the screen and show the top shelf for this app.
@@ -1159,7 +1219,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
     /** Refits the glass to the focused holder once the grid layout and tile dimensions settle. */
     private void refitGlass() {
-        if (isDestroyed() || adapter.appCount() == 0 || libraryFocusPending) return;
+        if (isDestroyed() || adapter.appCount() == 0 || libraryFocusPending || (apple && !reordering)) return;
         int pos = Math.max(0, Math.min(lastFocused, adapter.appCount() - 1));
         RecyclerView.ViewHolder vh = grid.findViewHolderForAdapterPosition(pos);
         View card = vh == null ? null : vh.itemView.findViewById(R.id.card);
@@ -1180,6 +1240,17 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         int color = ambientDisplayColor(adapter.ambientColorAt(position));
         float y = dockTopInRoot - 14 * density - 26 * density - hero.getHeight();
         boolean changed = !label.contentEquals(heroName.getText());
+        if (shelf != null) {
+            if (shelf.show(shelfContent(position), position, headerBottom(), dockTopInRoot,
+                    Apple.motion(animations) && !reducedMotion)) {
+                hero.animate().cancel();
+                hero.setAlpha(0f);
+                dockAmbient(color);
+                heroShown = true;
+                return;
+            }
+            shelf.hide(false);   // no room for it: the plain name instead
+        }
         if (cinematic) showHeroArt(position);
 
         if (!animations || reducedMotion) {
@@ -1348,7 +1419,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         for (int i = 0; i < count; i++) {
             View dot = heroDots.getChildAt(rtlAppGrid ? count - 1 - i : i);
             boolean on = i == position;
-            ((GradientDrawable) dot.getBackground()).setColor(on ? 0xFFFFFFFF : 0x4DFFFFFF);
+            int lit = apple ? Apple.light(AppleFocus.accent) : 0xFFFFFFFF;
+            ((GradientDrawable) dot.getBackground()).setColor(on ? lit : 0x4DFFFFFF);
             ViewGroup.LayoutParams lp = dot.getLayoutParams();
             int w = (int) ((on ? 20 : 6) * density);
             if (lp.width != w) {
@@ -1464,6 +1536,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
     private void hideHero() {
         if (!heroShown) return;
+        if (shelf != null) shelf.hide(Apple.motion(animations) && !reducedMotion);
         stopAmbientAnimation();
         hero.animate().cancel();
         ambient.animate().cancel();
@@ -1477,6 +1550,143 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             hero.setAlpha(0f);
             ambient.setAlpha(0f);
             heroArt.setAlpha(0f);
+        }
+    }
+
+    // ---- Apple look ------------------------------------------------------------------------------
+
+    /** System sans for every text on Home, in the Settings screen's colours, with a soft shadow for contrast. */
+    private void applyAppleType() {
+        Apple.style(heroName, Apple.MEDIUM, Apple.TEXT, density);
+        if (!cinematic) {
+            heroName.setTextSize(TypedValue.COMPLEX_UNIT_SP, 44f);
+            heroName.setLetterSpacing(-0.01f);
+        }
+        Apple.style(heroMeta, Apple.REGULAR, Apple.TEXT_2, density);
+        Apple.style((TextView) findViewById(R.id.clock), Apple.LIGHT, Apple.TEXT, density);
+        ((TextView) findViewById(R.id.clock)).setLetterSpacing(-0.02f);
+        Apple.style((TextView) findViewById(R.id.ampm), Apple.MEDIUM, Apple.TEXT_2, density);
+        Apple.style((TextView) findViewById(R.id.date), Apple.MEDIUM, Apple.TEXT_2, density);
+        Apple.style((TextView) findViewById(R.id.shamsiDate), Apple.REGULAR, Apple.TEXT, density);
+        Apple.style((TextView) findViewById(R.id.stats), Apple.MEDIUM, Apple.TEXT_2, density);
+        Apple.style(greeting, Apple.MEDIUM, Apple.TEXT_2, density);
+        for (int id : new int[]{R.id.btnInputs, R.id.btnWifi, R.id.btnSettings}) {
+            ((TextView) findViewById(id)).setTypeface(Apple.MEDIUM);
+        }
+    }
+
+    /**
+     * Darkens the wallpaper where text sits: the header at the top, the shelf's name above the dock (an oval on the
+     * text's side) and the names under the tiles at the bottom. The darkest points stay at about 55–70% black, so
+     * white text keeps a contrast of 4.5:1 even over a white picture. One small bitmap stretched over the screen.
+     */
+    private Drawable appleScrim() {
+        int w = 320, h = 180;
+        Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bmp);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
+        int k = getColor(R.color.apple_background) & 0xFFFFFF;   // the shade's colour, with the alphas below
+        float top = h * 0.34f;
+        paint.setShader(new LinearGradient(0, 0, 0, top,
+                new int[]{0xB8000000 | k, 0x99000000 | k, 0x52000000 | k, 0x1A000000 | k, k},
+                new float[]{0f, 0.3f, 0.6f, 0.82f, 1f}, Shader.TileMode.CLAMP));
+        canvas.drawRect(0, 0, w, top, paint);
+        boolean rtl = getResources().getBoolean(R.bool.rtl_menu_bar);
+        float cx = rtl ? w * 0.86f : w * 0.14f, cy = h * 0.56f;
+        RadialGradient oval = new RadialGradient(cx, cy, w * 0.56f,
+                new int[]{0xA6000000 | k, 0x80000000 | k, 0x33000000 | k, k}, new float[]{0f, 0.42f, 0.76f, 1f},
+                Shader.TileMode.CLAMP);
+        Matrix m = new Matrix();
+        m.setScale(1f, 0.5f, cx, cy);
+        oval.setLocalMatrix(m);
+        paint.setShader(oval);
+        canvas.drawRect(0, 0, w, h, paint);
+        float bottom = h * 0.6f;
+        paint.setShader(new LinearGradient(0, bottom, 0, h,
+                new int[]{k, 0x33000000 | k, 0x80000000 | k}, new float[]{0f, 0.5f, 1f}, Shader.TileMode.CLAMP));
+        canvas.drawRect(0, bottom, w, h, paint);
+        BitmapDrawable scrim = new BitmapDrawable(getResources(), bmp);
+        scrim.setGravity(Gravity.FILL);
+        return scrim;
+    }
+
+    /**
+     * A new wallpaper is on screen: refresh the dock glass's frosted copy and, with auto_accent, the accent. The
+     * frost maps to the screen like the wallpaper's centre crop.
+     */
+    private void onWallpaperShown(Bitmap wallpaper) {
+        WallpaperTone tone = WallpaperTone.from(wallpaper);
+        if (tone == null) return;
+        int sw = getResources().getDisplayMetrics().widthPixels, sh = getResources().getDisplayMetrics().heightPixels;
+        float crop = Math.max(sw / (float) tone.sourceW, sh / (float) tone.sourceH);
+        Matrix m = new Matrix();
+        m.setScale(tone.sourceW / (float) tone.frost.getWidth() * crop, tone.sourceH / (float) tone.frost.getHeight() * crop);
+        m.postTranslate((sw - tone.sourceW * crop) / 2f, (sh - tone.sourceH * crop) / 2f);
+        int accent = autoAccent ? tone.accent : 0;
+        AppleFocus.accent = accent;
+        if (dockDecoration != null) {
+            dockDecoration.setFrost(tone.frost, m, wallpaperDimAlpha);
+            dockDecoration.setAccent(accent);
+        }
+        if (shelf != null) shelf.setAccent(accent);
+        if (cinematic && heroShown) updateHeroDots(lastFocused);
+        grid.invalidate();
+    }
+
+    /** Bottom of the header (clock and buttons) in root coordinates: the Top Shelf starts below it. */
+    private float headerBottom() {
+        View header = (View) btnSettings.getParent().getParent();
+        headerRect.set(0, 0, header.getWidth(), header.getHeight());
+        root.offsetDescendantRectToMyCoords(header, headerRect);
+        return headerRect.bottom;
+    }
+
+    /** The Top Shelf page for this dock app: banner (sharper, cached), name, caption, wash and dots. */
+    private TopShelf.Content shelfContent(int position) {
+        TopShelf.Content c = new TopShelf.Content();
+        c.key = adapter.keyAt(position);
+        c.name = adapter.labelAt(position);
+        c.caption = shelfCaption(position);
+        if (c.key != null) {
+            if (!shelfBanners.containsKey(c.key)) shelfBanners.put(c.key, adapter.shelfBannerAt(position));
+            c.banner = shelfBanners.get(c.key);
+            Bitmap art = heroArtCache.get(c.key);
+            if (art == null) {
+                art = HeroArt.from(adapter.artworkAt(position));
+                if (art != null) heroArtCache.put(c.key, art);
+            }
+            c.backdrop = art;
+        }
+        if (c.banner == null) c.icon = adapter.shelfIconAt(position);
+        c.color = adapter.ambientColorAt(position);
+        c.dots = Math.min(Math.min(adapter.dockFilled(), COLUMNS), adapter.appCount());
+        c.dot = position;
+        return c;
+    }
+
+    /** A card's caption, else when Home last opened the app, else the app's category; null for none. */
+    private CharSequence shelfCaption(int position) {
+        String caption = adapter.captionAt(position);
+        if (caption != null) return caption;
+        long when = LastOpened.get(this, adapter.packageAt(position));
+        if (when > 0) return getString(R.string.last_opened, LastOpened.describe(this, when));
+        return adapter.categoryAt(position);
+    }
+
+    /** The dock glow (dock_glow) while the Top Shelf shows: same colour logic as the plain shelf. */
+    private void dockAmbient(int color) {
+        if (!animations || reducedMotion) {
+            ambient.animate().cancel();
+            setAmbient(color);
+            ambient.setAlpha(1f);
+        } else if (!heroShown) {
+            stopAmbientAnimation();
+            ambient.animate().cancel();
+            setAmbient(color);
+            ambient.setAlpha(0f);
+            ambient.animate().alpha(1f).setDuration(600).start();
+        } else {
+            transitionAmbient(color);
         }
     }
 

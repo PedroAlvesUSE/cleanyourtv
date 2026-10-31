@@ -142,6 +142,7 @@
     <string name="set_fill">Completar a dock</string>
     <string name="set_fill_d">Apps ocupam os lugares livres da dock.</string>
     <string name="set_cards_d">Cartões dos apps que oferecem um.</string>
+    <string name="last_opened">Aberto %1$s</string>
     <string name="set_shelf">Top Shelf</string>
     <string name="set_shelf_d">Uma prévia grande do conteúdo do app em foco.</string>
     <string name="set_recents">Apps recentes</string>

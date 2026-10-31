@@ -4,6 +4,8 @@ import android.app.Activity;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
+import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.content.res.Resources;
@@ -22,6 +24,7 @@ import android.view.ViewGroup;
 import android.view.ViewOutlineProvider;
 import android.view.animation.DecelerateInterpolator;
 import android.view.animation.OvershootInterpolator;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -72,6 +75,10 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         final String name;
         /** Ambient glow colour; 0 until sampled from the banner, or the card's accent from the start. */
         int ambient;
+        /** The activity behind the tile, for the Top Shelf's sharper banner and category; null for built-in tiles. */
+        ActivityInfo info;
+        /** A module card's caption, or null. */
+        final String caption;
 
         Entry(String label, ComponentName component, Drawable banner, Drawable icon) {
             this(APP, label, component, banner, icon, null, 0);
@@ -85,6 +92,7 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             this.banner = banner;
             this.icon = icon;
             this.name = caption == null ? label : label + " \u00B7 " + caption;
+            this.caption = caption;
             this.ambient = accent;
         }
     }
@@ -197,6 +205,10 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
     /** Tile names and bundled banners that replace the app's own (config.xml, app_labels and app_banners). */
     private final Map<String, String> appLabels, appBanners;
     private final List<Entry> items = new ArrayList<>();
+    /** apple_style: tvOS focus (AppleFocus) instead of the zoom and glass; parallax adds the tilt. */
+    private final boolean apple, parallax;
+    /** Top Shelf on: launches are noted (LastOpened) for its caption, as the cinematic shelf does. */
+    private final boolean recordLaunches;
 
     AppAdapter(Context ctx, TileListener listener, int dockSize, Config cfg) {
         this.ctx = ctx;
@@ -217,6 +229,9 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         this.launchActions = cfg.launchActions;
         this.appLabels = cfg.appLabels;
         this.appBanners = cfg.appBanners;
+        this.apple = cfg.feature(Apple.STYLE);
+        this.parallax = apple && cfg.feature(Apple.PARALLAX);
+        this.recordLaunches = apple && cfg.feature(Apple.TOP_SHELF);
         // Tiles keep their identity across reload(), so a focused tile stays on its app instead of
         // its view being rebound to whatever app now sits in that slot.
         setHasStableIds(true);
@@ -265,11 +280,11 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             Drawable banner = bundledBanner(appBanners.get(pkg));
             if (banner == null) banner = loadBanner(pm, ri);
             Drawable icon = ri.loadIcon(pm);
-            if (card != null) {
-                fresh.add(new Entry(Entry.CARD, label, component, banner, icon, card.caption, card.accent));
-            } else {
-                fresh.add(new Entry(label, component, banner, icon));
-            }
+            Entry entry = card != null
+                    ? new Entry(Entry.CARD, label, component, banner, icon, card.caption, card.accent)
+                    : new Entry(label, component, banner, icon);
+            entry.info = ri.activityInfo;
+            fresh.add(entry);
         }
         Collections.sort(fresh, (a, b) -> {
             // The owner's own order first; tiles it does not know (new installs) follow by the rule below.
@@ -375,7 +390,36 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             v.setPadding(v.getPaddingLeft(), pad, v.getPaddingRight(), pad);
         }
         name.setLayoutParams(nameLp);
-        return new Holder(v, listener, animations, advancedEffects, reducedMotion);
+        AppleFocus focus = null;
+        if (apple) {
+            View shadow = v.findViewById(R.id.shadow);
+            int pad = Math.round(SoftShadow.PAD_DP * density);
+            FrameLayout.LayoutParams shadowLp = (FrameLayout.LayoutParams) shadow.getLayoutParams();
+            shadowLp.width = w + 2 * pad;
+            shadowLp.height = h + 2 * pad;
+            // Negative margins on both sides: the shadow spills past the item without adding to its height.
+            shadowLp.topMargin = -pad;
+            shadowLp.bottomMargin = -pad;
+            shadow.setLayoutParams(shadowLp);
+            shadow.setBackground(SoftShadow.drawable(ctx.getResources(), w, h, cornerRadius(w, density)));
+            shadow.setVisibility(View.VISIBLE);
+            GlareView glare = v.findViewById(R.id.glare);
+            ViewGroup.LayoutParams glareLp = glare.getLayoutParams();
+            glareLp.width = 2 * w;
+            glareLp.height = 2 * h;
+            glare.setLayoutParams(glareLp);
+            glare.setTileSize(w, h);
+            glare.setVisibility(View.VISIBLE);
+            TextView label = v.findViewById(R.id.label);
+            TextView nameText = (TextView) name;
+            Apple.style(nameText, Apple.MEDIUM, Apple.TEXT, density);
+            nameText.setLetterSpacing(0f);
+            label.setTypeface(Apple.MEDIUM);
+            label.setTextColor(Apple.TEXT);
+            focus = new AppleFocus(v, card, shadow, glare, animations, parallax, reducedMotion);
+            focus.setTileSize(w, h);
+        }
+        return new Holder(v, listener, animations, advancedEffects, reducedMotion, focus);
     }
 
     @Override
@@ -392,6 +436,7 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             h.icon.setImageDrawable(null);
             h.card.setOnClickListener(null);
             h.card.setOnLongClickListener(null);
+            if (h.apple != null) h.apple.snap(false);
             return;
         }
         h.card.setVisibility(View.VISIBLE);
@@ -400,12 +445,18 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         h.name.setVisibility(dockRow && position < dockSize ? View.INVISIBLE : View.VISIBLE);   // the dock has no labels
         boolean focused = h.card.isFocused();   // a rebind after reload() can hit the focused tile
         h.name.setAlpha(focused ? 1f : 0f);
+        if (h.apple != null) {
+            h.apple.snap(focused);
+            h.banner.setScaleX(1f);
+            h.banner.setScaleY(1f);
+        } else {
         h.card.setScaleX(focused && animations ? focusScale() : 1f);
         h.card.setScaleY(focused && animations ? focusScale() : 1f);
         h.card.setTranslationY(focused && advancedEffects ? -4f * ctx.getResources().getDisplayMetrics().density : 0f);
         h.card.setTranslationZ(focused && advancedEffects ? 8f * ctx.getResources().getDisplayMetrics().density : 0f);
         h.banner.setScaleX(focused && advancedEffects ? 1.035f : 1f);
         h.banner.setScaleY(focused && advancedEffects ? 1.035f : 1f);
+        }
         if (e.banner != null) {
             h.banner.setImageDrawable(e.banner);
             h.banner.setVisibility(View.VISIBLE);
@@ -448,7 +499,7 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         }
         try {
             ctx.startActivity(i);
-            if (cinematic) LastOpened.record(ctx, e.pkg);
+            if (cinematic || recordLaunches) LastOpened.record(ctx, e.pkg);
             if (advancedEffects && ctx instanceof Activity) {
                 ((Activity) ctx).overridePendingTransition(R.anim.app_open_enter, R.anim.app_open_exit);
             }
@@ -560,7 +611,52 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
     }
 
     float focusScale() {
-        return !animations ? 1f : advancedEffects ? 1.12f : 1.10f;
+        return !animations ? 1f : apple ? AppleFocus.SCALE : advancedEffects ? 1.12f : 1.10f;
+    }
+
+    /** A module card's caption at this position, or null. */
+    String captionAt(int position) {
+        return position >= 0 && position < items.size() ? items.get(position).caption : null;
+    }
+
+    /** The app's Play category in the TV's language ("Video", "Games"), or null when it declares none. */
+    CharSequence categoryAt(int position) {
+        if (position < 0 || position >= items.size()) return null;
+        ActivityInfo info = items.get(position).info;
+        if (info == null || info.applicationInfo == null) return null;
+        return ApplicationInfo.getCategoryTitle(ctx, info.applicationInfo.category);
+    }
+
+    /**
+     * The Top Shelf's banner: the app's banner at the highest density it ships, since the shelf shows it about
+     * twice the tile's size. A bundled banner (app_banners) or the tile's own when there is nothing sharper.
+     */
+    Drawable shelfBannerAt(int position) {
+        if (position < 0 || position >= items.size()) return null;
+        Entry e = items.get(position);
+        if (e.banner == null) return null;
+        if (e.info != null && !appBanners.containsKey(e.pkg)) {
+            int id = e.info.banner != 0 ? e.info.banner : e.info.applicationInfo.banner;
+            if (id != 0) {
+                try {
+                    Resources res = ctx.getPackageManager().getResourcesForApplication(e.info.applicationInfo);
+                    Drawable d = res.getDrawableForDensity(id, DisplayMetrics.DENSITY_XXXHIGH, null);
+                    if (d != null) return d;
+                } catch (PackageManager.NameNotFoundException | Resources.NotFoundException
+                         | OutOfMemoryError ignored) {
+                    // fall back to the tile's banner
+                }
+            }
+        }
+        Drawable.ConstantState state = e.banner.getConstantState();
+        return state != null ? state.newDrawable(ctx.getResources()).mutate() : null;
+    }
+
+    /** The tile's icon as a separate drawable the shelf can size freely. */
+    Drawable shelfIconAt(int position) {
+        if (position < 0 || position >= items.size() || items.get(position).icon == null) return null;
+        Drawable.ConstantState state = items.get(position).icon.getConstantState();
+        return state != null ? state.newDrawable(ctx.getResources()).mutate() : null;
     }
 
     /** A vivid colour sampled from the app's banner (or icon), cached per entry; a card's accent when it set one. */
@@ -630,10 +726,13 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         final boolean animations;
         final boolean advancedEffects;
         final boolean reducedMotion;
+        /** apple_style focus, or null for the classic zoom. */
+        final AppleFocus apple;
 
         Holder(View v, TileListener listener, boolean animations, boolean advancedEffects,
-               boolean reducedMotion) {
+               boolean reducedMotion, AppleFocus apple) {
             super(v);
+            this.apple = apple;
             card = v.findViewById(R.id.card);
             banner = v.findViewById(R.id.banner);
             icon = v.findViewById(R.id.icon);
@@ -658,6 +757,7 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
                 if (keyCode != KeyEvent.KEYCODE_DPAD_UP && keyCode != KeyEvent.KEYCODE_DPAD_DOWN
                         && keyCode != KeyEvent.KEYCODE_DPAD_LEFT && keyCode != KeyEvent.KEYCODE_DPAD_RIGHT) return false;
                 int pos = getBindingAdapterPosition();
+                if (apple != null) apple.onKey(keyCode);
                 return listener != null && pos != RecyclerView.NO_POSITION && listener.onTileVerticalKey(pos, keyCode);
             });
 
@@ -665,6 +765,24 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
                 view.animate().cancel();
                 banner.animate().cancel();
                 name.animate().cancel();
+                if (apple != null) {
+                    apple.onFocusChanged(focused);
+                    if (!Apple.motion(animations)) {
+                        name.setAlpha(focused ? 1f : 0f);
+                        name.setTranslationY(focused ? density * 4f : 0f);
+                    } else {
+                        // The name comes in with the tile and leaves faster, like the focus itself.
+                        name.animate().alpha(focused ? 1f : 0f)
+                                .translationY(focused ? density * 4f : -density * 2f)
+                                .setDuration(focused ? 240 : 120)
+                                .setInterpolator(new DecelerateInterpolator(1.6f)).start();
+                    }
+                    int pos = getBindingAdapterPosition();
+                    if (focused && listener != null && pos != RecyclerView.NO_POSITION) {
+                        listener.onTileFocused(pos, view);
+                    }
+                    return;
+                }
                 float scale = !animations ? 1f : advancedEffects ? 1.12f : 1.10f;
                 float s = focused ? scale : 1f;
                 if (!animations) {
