@@ -160,15 +160,7 @@ final class SystemActions {
     }
 
     private static void remoteInfo(Activity a) {
-        String url = RemoteServer.url();
-        String message = url == null ? a.getString(R.string.remote_off)
-                : a.getString(R.string.remote_info, url, RemoteServer.pin(a));
-        new AlertDialog.Builder(a).setTitle(R.string.set_phone).setMessage(message)
-                .setPositiveButton(android.R.string.ok, null)
-                .setNeutralButton(R.string.remote_new_pin, (d, w) -> {
-                    RemoteServer.renewPin(a);
-                    remoteInfo(a);
-                }).show();
+        RemoteQrDialog.show(a);
     }
 
     /** Pede um PIN de 4 dígitos; só chama {@code done} com 4 dígitos. */

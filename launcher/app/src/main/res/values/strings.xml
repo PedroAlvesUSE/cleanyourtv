@@ -189,7 +189,7 @@
     <string name="set_quick_menu">Quick menu</string>
     <string name="set_quick_menu_d">Hold Home for volume, inputs, timer, Wi-Fi and screen saver.</string>
     <string name="set_phone">Phone remote</string>
-    <string name="set_phone_d">Opens a page on your local network with D-pad, text and links. Needs a PIN. Off by default.</string>
+    <string name="set_phone_d">Opens a page on your local network with a touchpad, media keys, search, apps and text. Needs a PIN. Off by default.</string>
     <string name="set_family">Home and Family</string>
     <string name="set_family_d">Profiles, limits and the TV at night.</string>
     <string name="set_profiles">Profiles</string>
@@ -285,8 +285,11 @@
     <string name="set_parental_limit">Daily limit</string>
     <string name="set_parental_limit_d">After this time of use today, every app asks for the PIN. Needs: appops set com.gathin.tvhome GET_USAGE_STATS allow.</string>
     <string name="set_remote_info">Phone remote address</string>
-    <string name="set_remote_info_d">Shows the address and the PIN for the phone page.</string>
-    <string name="remote_info">Open %1$s on your phone, on the same network.\n\nPIN: %2$s</string>
+    <string name="set_remote_info_d">Shows a QR code that opens the phone remote with no typing, plus the address and the PIN.</string>
+    <string name="remote_qr_hint">Point your phone camera at the code. The remote opens with no typing.</string>
+    <string name="remote_qr_or">Or open this address on the same network:</string>
+    <string name="remote_done">Done</string>
+    <string name="remote_waiting">Starting the server…</string>
     <string name="remote_off">The server is off. Turn the function on and enable the Home key accessibility service.</string>
     <string name="remote_new_pin">New PIN</string>
     <string name="set_tv_info">TV information</string>
