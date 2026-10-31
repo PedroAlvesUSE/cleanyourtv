@@ -6,7 +6,7 @@ Launcher Android TV em Java (`launcher/`, pacote `com.gathin.tvhome`).
 
 - Use o JDK 17 (`JAVA_HOME=/home/pedrohrqe/tvclean/dl/jdk`). O Gradle 8.9 não roda no JDK 25.
 - Testes e APK: `cd launcher && ./gradlew --no-daemon -q testDebugUnitTest assembleRelease`.
-- O CI exige APK release abaixo de 400 KB (`.github/workflows/ci.yml`).
+- O CI exige APK release abaixo de 768 KB (`.github/workflows/ci.yml`).
 - Depois de instalar um APK novo, reative o serviço `com.gathin.tvhome/.HomeKeyService` nas configurações de acessibilidade.
 
 ## Opções
