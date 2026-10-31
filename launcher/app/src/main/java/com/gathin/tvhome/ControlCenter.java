@@ -39,6 +39,10 @@ final class ControlCenter {
     private static final int PANEL_RADIUS_DP = 28;
     private static final int INSET_DP = 12;
     private static final int ITEM_RADIUS_DP = PANEL_RADIUS_DP - INSET_DP;
+    /** Fundo do item em foco: opaco (o tom do vidro #33FFFFFF sobre o painel), para cobrir os vizinhos e projetar sombra. */
+    static final int FOCUS_FILL = 0xFF48484C;
+    /** Altura do item em foco sobre os vizinhos, em dp. */
+    static final float FOCUS_LIFT_DP = 4;
     private static final int TEXT = 0xFFF5F5F7;
     private static final int TEXT_2 = 0xFFA1A1A6;
 
@@ -81,8 +85,14 @@ final class ControlCenter {
         ScrollView scroll = new ScrollView(a);
         scroll.setVerticalScrollBarEnabled(false);
         scroll.setClipToPadding(false);
+        // A borda que esmaece também faz o ScrollView parar o item em foco a 24 dp da borda, e não colado nela.
+        scroll.setVerticalFadingEdgeEnabled(true);
+        scroll.setFadingEdgeLength((int) (24 * dp));
         list = new LinearLayout(a);
         list.setOrientation(LinearLayout.VERTICAL);
+        // O item em foco cresce e sai por cima dos vizinhos e do recuo; só o contorno do painel recorta.
+        list.setClipChildren(false);
+        list.setClipToPadding(false);
         int inset = (int) (INSET_DP * dp);
         list.setPadding(inset, inset, inset, inset);
         scroll.addView(list);
@@ -165,8 +175,10 @@ final class ControlCenter {
             header.setText(R.string.set_tv_info);
             header.setPadding((int) (14 * dp), (int) (18 * dp), 0, (int) (8 * dp));
             list.addView(header);
-            View info = SystemInfo.panel(a, true);
-            focusScale(info);
+            ViewGroup info = (ViewGroup) SystemInfo.panel(a, true);
+            for (int i = 0; i < info.getChildCount(); i++) {
+                if (info.getChildAt(i).isFocusable()) focusScale(info.getChildAt(i));
+            }
             list.addView(info, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT));
         }
@@ -239,7 +251,7 @@ final class ControlCenter {
         return (TextView) ((LinearLayout) row).getChildAt(2);
     }
 
-    /** Linha com ícone, título e estado; foco com fundo #33FFFFFF (cantos de 16 dp) e escala 1,03 com mola, como em Configurações. */
+    /** Linha com ícone, título e estado; foco com fundo opaco (cantos de 16 dp), escala e elevação ({@link #focusScale}). */
     private View row(int icon, int title) {
         LinearLayout row = new LinearLayout(a);
         row.setGravity(Gravity.CENTER_VERTICAL);
@@ -247,7 +259,7 @@ final class ControlCenter {
         row.setClickable(true);
         row.setPadding((int) (14 * dp), 0, (int) (14 * dp), 0);
         StateListDrawable bg = new StateListDrawable();
-        bg.addState(new int[]{android.R.attr.state_focused}, round(0x33FFFFFF, ITEM_RADIUS_DP * dp));
+        bg.addState(new int[]{android.R.attr.state_focused}, round(FOCUS_FILL, ITEM_RADIUS_DP * dp));
         bg.addState(new int[0], new ColorDrawable(0));
         if (motion) {
             bg.setEnterFadeDuration(150);
@@ -271,12 +283,19 @@ final class ControlCenter {
         return row;
     }
 
-    /** Escala 1,03 com mola no foco. O recuo de 12 dp cabe a escala sem cortar o fundo nos cantos do painel. */
+    /**
+     * Escala 1,02 com mola e elevação de 4 dp no foco: o item flutua sobre os vizinhos e a borda do grupo, com
+     * sombra suave. O recuo de 12 dp cabe a escala e a sombra sem tocar o contorno do painel.
+     */
     private void focusScale(View view) {
         SpringAnimation sx = spring(view, DynamicAnimation.SCALE_X);
         SpringAnimation sy = spring(view, DynamicAnimation.SCALE_Y);
+        View.OnFocusChangeListener before = view.getOnFocusChangeListener();
         view.setOnFocusChangeListener((v, focused) -> {
-            float scale = focused ? 1.03f : 1f;
+            if (before != null) before.onFocusChange(v, focused);
+            v.setTranslationZ(focused ? FOCUS_LIFT_DP * dp : 0);
+            v.invalidateOutline();
+            float scale = focused ? 1.02f : 1f;
             if (motion) {
                 sx.animateToFinalPosition(scale);
                 sy.animateToFinalPosition(scale);
