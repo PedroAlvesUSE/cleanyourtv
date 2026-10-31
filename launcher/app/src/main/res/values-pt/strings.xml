@@ -297,4 +297,7 @@
     <string name="set_clean_now_d">Fecha os apps em segundo plano e mostra a memória liberada.</string>
     <string name="set_backup_open">Abrir backup</string>
     <string name="set_backup_open_d">Mostra um endereço, um PIN e um QR code para o celular.</string>
+    <string name="set_recommended">Vídeos recomendados</string>
+    <string name="set_recommended_d">Uma linha de vídeos populares do YouTube acima da dock, por instâncias do Piped e Invidious. Sem chave necessária.</string>
+    <string name="rec_title">Recomendados</string>
 </resources>

@@ -314,4 +314,7 @@
     <string name="set_clean_now_d">Closes the apps in the background and tells how much memory it freed.</string>
     <string name="set_backup_open">Open backup</string>
     <string name="set_backup_open_d">Shows an address, a PIN and a QR code for your phone.</string>
+    <string name="set_recommended">Recommended videos</string>
+    <string name="set_recommended_d">A row of popular YouTube videos above the dock, from Piped and Invidious instances. No key needed.</string>
+    <string name="rec_title">Recommended</string>
 </resources>

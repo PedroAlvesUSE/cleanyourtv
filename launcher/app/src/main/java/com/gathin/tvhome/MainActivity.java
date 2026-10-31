@@ -228,6 +228,31 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private TopShelf shelf;
     /** continue_watching: the Continue watching row under the dock; null when off. */
     private ContinueRow continueRow;
+    /** recommended_row: the Recommended videos row above the dock; null when off. */
+    private RecommendedRow recommendedRow;
+    /** above_dock: the container with Continue watching and Recommended above the dock; null when off. */
+    private AboveDock aboveDock;
+    /** above_dock focus: Up goes to the tab header, Down goes to the dock tile under the card. */
+    private final ContinueRow.Host aboveHost = new ContinueRow.Host() {
+        @Override public void onRowUp(int column) {
+            if (aboveDock != null && aboveDock.focusUp(column)) {
+                grid.playSoundEffect(SoundEffectConstants.NAVIGATION_UP);
+            }
+        }
+
+        @Override public boolean onRowDown(int column) {
+            if (adapter.dockFilled() <= 0) return false;
+            grid.playSoundEffect(SoundEffectConstants.NAVIGATION_DOWN);
+            focusTile(Math.min(column, Math.max(0, adapter.dockFilled() - 1)));
+            return true;
+        }
+
+        @Override public void onRowFocused() {
+            libraryFocusPending = false;
+            hideGlass();
+            hideHero();
+        }
+    };
     /** Sharper banners for the Top Shelf, loaded the first time each dock app is focused. */
     private final Map<String, Drawable> shelfBanners = new HashMap<>();
     private DockDecoration dockDecoration;
@@ -458,8 +483,26 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         grid.setAdapter(adapter);
         // Continue watching: off in guest mode, and the plain grid (dock_row false) has no dock to sit under.
         if (cfg.feature(ContinueStore.FEATURE) && !cfg.guestMode() && dockRow) {
-            continueRow = new ContinueRow(this, continueHost, grid, COLUMNS, cfg,
+            continueRow = new ContinueRow(this, aboveHost, grid, COLUMNS, cfg,
+                    apple && cfg.feature(Apple.PARALLAX), reducedMotion, true);
+        }
+        // Recommended videos: off unless the switch is on, and only with a dock row.
+        if (cfg.feature("recommended_row") && dockRow) {
+            recommendedRow = new RecommendedRow(this, aboveHost, grid, COLUMNS,
                     apple && cfg.feature(Apple.PARALLAX), reducedMotion);
+        }
+        // Above the dock: Continue watching + Recommended as two pages with a tab header.
+        if ((continueRow != null || recommendedRow != null) && dockRow) {
+            aboveDock = new AboveDock(this, new AboveDock.Host() {
+                @Override public void onTopBar() {
+                    grid.playSoundEffect(SoundEffectConstants.NAVIGATION_UP);
+                    btnInputs.requestFocus();
+                }
+
+                @Override public void onShelfLayout() {
+                    refitHero();
+                }
+            }, continueRow, recommendedRow, grid);
         }
 
         // tvOS layout: push the dock row towards the bottom of the screen, leaving room for
@@ -655,10 +698,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             return;
         }
         promptsPaused = false;
-        if (continueRow != null) {
-            ContinueListener.ensureRunning(this);
-            continueRow.start();
-        }
+        if (continueRow != null) ContinueListener.ensureRunning(this);
+        if (aboveDock != null) aboveDock.start();
         if (rebuildOnResume) {
             tilesReady = false;
             reloadApps(true);
@@ -791,7 +832,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         handler.removeCallbacks(minuteTick);
         stopStats();
         if (diya != null) diya.stop();
-        if (continueRow != null) continueRow.stop();
+        if (aboveDock != null) aboveDock.stop();
         cancelPendingFocusScroll();
         // Nothing of ours stays on screen over another app; an undecided prompt simply returns next time.
         if (cardPrompt != null) cardPrompt.dismiss();
@@ -819,7 +860,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     protected void onDestroy() {
         super.onDestroy();
         wallpaperPlayer.close();
-        if (continueRow != null) continueRow.destroy();
+        if (aboveDock != null) aboveDock.destroy();
         ConnectivityManager cm = getSystemService(ConnectivityManager.class);
         TvInputManager tim = (TvInputManager) getSystemService(TV_INPUT_SERVICE);
         if (tim != null) tim.unregisterCallback(inputCallback);
@@ -1246,12 +1287,29 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         }
     }
 
+    /** The shelf above the dock changed height: put the dock name and the top shelf back in place. */
+    private void refitHero() {
+        if (lastFocused < 0 || lastFocused >= COLUMNS || adapter.appCount() == 0) return;
+        RecyclerView.ViewHolder vh = grid.findViewHolderForAdapterPosition(lastFocused);
+        if (vh == null) return;
+        View card = vh.itemView.findViewById(R.id.card);
+        if (card == null || !card.isFocused()) return;
+        onTileFocused(lastFocused, card);
+    }
+
     // ---- top shelf -------------------------------------------------------------------------------
 
     private void showHero(int position, float dockTopInRoot) {
+        // The shelf above the dock takes the room just above the dock: the name and the artwork move up.
+        if (aboveDock != null) dockTopInRoot -= aboveDock.visibleHeight();
         String label = adapter.labelAt(position);
         int color = ambientDisplayColor(adapter.ambientColorAt(position));
         float y = dockTopInRoot - 14 * density - 26 * density - hero.getHeight();
+        if (y < headerBottom()) {
+            // No room for the name above the shelf: the shelf keeps the space.
+            hideHero();
+            return;
+        }
         boolean changed = !label.contentEquals(heroName.getText());
         if (shelf != null) {
             if (shelf.show(shelfContent(position), position, headerBottom(), dockTopInRoot,
@@ -1910,17 +1968,16 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                     rtlAppGrid, keyCode == KeyEvent.KEYCODE_DPAD_LEFT);
         }
         if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
-            if (position < COLUMNS) return false;          // dock row: let focus move to the top bar
-            if (position < 2 * COLUMNS && continueRow != null && continueRow.focusColumn(position % COLUMNS)) {
-                grid.playSoundEffect(SoundEffectConstants.NAVIGATION_UP);
-                return true;
+            // Dock row: Up goes to the shelf above it when there is one, else to the top bar.
+            if (position < COLUMNS) {
+                if (aboveDock != null && aboveDock.focusFirst(position)) {
+                    grid.playSoundEffect(SoundEffectConstants.NAVIGATION_UP);
+                    return true;
+                }
+                return false;
             }
             target = position - COLUMNS;
         } else {
-            if (position < COLUMNS && continueRow != null && continueRow.focusColumn(position)) {
-                grid.playSoundEffect(SoundEffectConstants.NAVIGATION_DOWN);
-                return true;
-            }
             int lastRowStart = ((count - 1) / COLUMNS) * COLUMNS;
             if (position >= lastRowStart) {
                 if (adapter.isLibraryAt(count)) focusLibrary();
@@ -1934,30 +1991,6 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 ? SoundEffectConstants.NAVIGATION_UP : SoundEffectConstants.NAVIGATION_DOWN);
         return true;
     }
-
-    /** Focus between the Continue watching row, the dock above it and the grid below it. */
-    private final ContinueRow.Host continueHost = new ContinueRow.Host() {
-        @Override
-        public void onRowUp(int column) {
-            grid.playSoundEffect(SoundEffectConstants.NAVIGATION_UP);
-            focusTile(Math.min(column, Math.max(0, adapter.dockFilled() - 1)));
-        }
-
-        @Override
-        public boolean onRowDown(int column) {
-            if (adapter.appCount() <= COLUMNS) return false;
-            grid.playSoundEffect(SoundEffectConstants.NAVIGATION_DOWN);
-            focusTile(Math.min(COLUMNS + column, adapter.appCount() - 1));
-            return true;
-        }
-
-        @Override
-        public void onRowFocused() {
-            libraryFocusPending = false;
-            hideGlass();
-            hideHero();
-        }
-    };
 
     @Override public void onLibraryFocused() {
         libraryFocusPending = false;

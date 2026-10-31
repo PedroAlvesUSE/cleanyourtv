@@ -115,6 +115,7 @@ final class SettingsCatalog {
                     action(SystemActions.CONTINUE_APPS, R.string.set_cw_apps, R.string.set_cw_apps_d),
                     bool(ContinueStore.FEATURE_MEDIA, R.string.set_cw_media, R.string.set_cw_media_d),
                     action(SystemActions.CONTINUE_ACCESS, R.string.set_cw_access, R.string.set_cw_access_d),
+                    bool("recommended_row", R.string.set_recommended, R.string.set_recommended_d),
                     soon("watch_later", R.string.set_later, R.string.set_later_d),
                     soon("owntv_channels", R.string.set_channels, R.string.set_channels_d),
                     soon("quick_resume", R.string.set_resume, R.string.set_resume_d)),

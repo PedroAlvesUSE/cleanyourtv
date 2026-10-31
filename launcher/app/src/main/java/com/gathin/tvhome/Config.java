@@ -87,7 +87,7 @@ final class Config {
             "config_backup", false, "quick_resume", false, "watch_later", false, "owntv_channels", false,
             "phone_remote", false, "night_mode", false, "parental", false, "guest_mode", false,
             "seasonal_wallpaper", false, "auto_accent", false, "own_screensaver", false, "tv_panel", false,
-            "quick_clean", false, "wallpaper_diag", false, "mic_tizentube", false);
+            "quick_clean", false, "wallpaper_diag", false, "mic_tizentube", false, "recommended_row", false);
 
     private static Map<String, Boolean> features(Object... pairs) {
         Map<String, Boolean> out = new LinkedHashMap<>();

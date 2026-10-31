@@ -80,7 +80,7 @@ final class ContinueRow {
     private final Map<String, String> labels = new HashMap<>();
     private final List<ContinueStore.Item> items = new ArrayList<>();
 
-    private final LinearLayout view;
+    final LinearLayout view;
     private final TextView header;
     private final RecyclerView list;
     private final RowAdapter adapter = new RowAdapter();
@@ -88,11 +88,19 @@ final class ContinueRow {
     private int gapPx;
     private int tileW, tileH, cellW;
     private boolean started;
+    /** Set when AboveDock owns the row: it positions the row and reserves no grid gap. */
+    private final boolean hosted;
+    private Runnable onChanged;
     private final Runnable reload = this::reload;
     private final ContentObserver observer;
 
     ContinueRow(Activity activity, Host host, RecyclerView grid, int columns, Config cfg, boolean parallax,
                 boolean reduced) {
+        this(activity, host, grid, columns, cfg, parallax, reduced, false);
+    }
+
+    ContinueRow(Activity activity, Host host, RecyclerView grid, int columns, Config cfg, boolean parallax,
+                boolean reduced, boolean hosted) {
         this.activity = activity;
         this.host = host;
         this.grid = grid;
@@ -102,6 +110,7 @@ final class ContinueRow {
         this.animations = cfg.animations;
         this.parallax = parallax;
         this.reduced = reduced;
+        this.hosted = hosted;
         this.hidden = new java.util.HashSet<>(cfg.hiddenApps);
         this.media = cfg.feature(ContinueStore.FEATURE_MEDIA);
 
@@ -117,6 +126,8 @@ final class ContinueRow {
         Apple.style(header, Apple.MEDIUM, Apple.TEXT_2, density);
         view.addView(header, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT));
+        // Hosted: the tab header of AboveDock already names the page.
+        if (hosted) header.setVisibility(View.GONE);
         list = new RecyclerView(activity);
         list.setLayoutManager(new LinearLayoutManager(activity, LinearLayoutManager.HORIZONTAL, false));
         list.setClipChildren(false);
@@ -127,10 +138,12 @@ final class ContinueRow {
         list.setAdapter(adapter);
         view.addView(list, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT));
-        parent.addView(view, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP));
+        if (!hosted) {
+            parent.addView(view, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP));
+            grid.addItemDecoration(gap);
+        }
 
-        grid.addItemDecoration(gap);
         grid.addOnScrollListener(new RecyclerView.OnScrollListener() {
             @Override
             public void onScrolled(@NonNull RecyclerView rv, int dx, int dy) {
@@ -168,6 +181,20 @@ final class ContinueRow {
 
     boolean shown() {
         return !items.isEmpty() && view.getVisibility() == View.VISIBLE;
+    }
+
+    /** True while there is at least one item, whether or not AboveDock is showing this page now. */
+    boolean hasItems() {
+        return !items.isEmpty();
+    }
+
+    int columns() {
+        return columns;
+    }
+
+    /** AboveDock listens here to pick a page and place the shelf when the items change. */
+    void setOnChanged(Runnable r) {
+        onChanged = r;
     }
 
     // ---- data ------------------------------------------------------------------------------------
@@ -230,6 +257,7 @@ final class ContinueRow {
             boolean hadFocus = focused != null;
             view.setVisibility(View.GONE);
             setGap(0);
+            if (onChanged != null) onChanged.run();
             if (hadFocus) host.onRowUp(0);
             return;
         }
@@ -239,6 +267,7 @@ final class ContinueRow {
             int target = Math.min(focusIndex, items.size() - 1);
             list.post(() -> focusIndex(target));
         }
+        if (onChanged != null) onChanged.run();
     }
 
     // ---- layout ----------------------------------------------------------------------------------
@@ -264,15 +293,14 @@ final class ContinueRow {
             list.setAdapter(adapter);   // new holders at the new size
         }
         int height = Math.round(HEADER_DP * density) + itemHeight();
-        setGap(height);
+        if (!hosted) setGap(height);
         place();
     }
 
-    private static final float HEADER_DP = 24, TOP_DP = 10, PAD_DP = 10, TEXT_GAP_DP = 12, TITLE_DP = 40,
-            APP_DP = 22, BOTTOM_DP = 14;
+    private static final float HEADER_DP = 24, TOP_DP = 10, PAD_DP = 10, BOTTOM_DP = 8;
 
     private int itemHeight() {
-        return tileH + Math.round((PAD_DP + TEXT_GAP_DP + TITLE_DP + APP_DP + BOTTOM_DP) * density);
+        return tileH + Math.round((PAD_DP + BOTTOM_DP) * density);
     }
 
     private void setGap(int px) {
@@ -293,7 +321,7 @@ final class ContinueRow {
 
     /** Puts the row on the gap under the dock row, wherever the grid has scrolled it. */
     private void place() {
-        if (items.isEmpty() || gapPx == 0) return;
+        if (hosted || items.isEmpty() || gapPx == 0) return;
         View dock = dockChild();
         if (dock == null) {
             view.setTranslationY(-10000f);
@@ -340,7 +368,7 @@ final class ContinueRow {
         return focusIndex(Math.min(items.size() - 1, firstVisible() + Math.max(0, column)));
     }
 
-    private boolean focusIndex(int index) {
+    boolean focusIndex(int index) {
         RecyclerView.ViewHolder vh = list.findViewHolderForAdapterPosition(index);
         if (vh != null) return ((Holder) vh).card.requestFocus();
         list.scrollToPosition(index);
@@ -501,43 +529,46 @@ final class ContinueRow {
                 Gravity.BOTTOM);
         blp.leftMargin = dp(12);
         blp.rightMargin = dp(12);
-        blp.bottomMargin = dp(10);
+        blp.bottomMargin = dp(54);
         card.addView(bar, blp);
         GlareView glare = new GlareView(ctx);
         glare.setAlpha(0f);
         card.addView(glare, new FrameLayout.LayoutParams(2 * w, 2 * h, Gravity.CENTER));
         glare.setTileSize(w, h);
 
-        int textLeft = (cellW - w) / 2;
+        // The title and the app sit on the artwork, like the tvOS shelves: the row stays one tile tall.
+        LinearLayout textBlock = new LinearLayout(ctx);
+        textBlock.setOrientation(LinearLayout.VERTICAL);
         TextView title = new TextView(ctx);
         title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-        title.setMaxLines(2);
+        title.setMaxLines(1);
         title.setEllipsize(TextUtils.TruncateAt.END);
-        title.setLineSpacing(0f, 1.05f);
         Apple.style(title, Apple.MEDIUM, Apple.TEXT, density);
-        FrameLayout.LayoutParams tlp = new FrameLayout.LayoutParams(w, ViewGroup.LayoutParams.WRAP_CONTENT,
-                Gravity.TOP | Gravity.START);
-        tlp.leftMargin = textLeft;
-        tlp.topMargin = h + dp(TEXT_GAP_DP);
-        item.addView(title, tlp);
-
+        textBlock.addView(title, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
         LinearLayout appRow = new LinearLayout(ctx);
         appRow.setOrientation(LinearLayout.HORIZONTAL);
         appRow.setGravity(Gravity.CENTER_VERTICAL);
         ImageView appIcon = new ImageView(ctx);
-        appRow.addView(appIcon, new LinearLayout.LayoutParams(dp(16), dp(16)));
+        appRow.addView(appIcon, new LinearLayout.LayoutParams(dp(14), dp(14)));
         TextView app = new TextView(ctx);
         app.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
         app.setSingleLine(true);
         app.setEllipsize(TextUtils.TruncateAt.END);
         Apple.style(app, Apple.REGULAR, Apple.TEXT_2, density);
         LinearLayout.LayoutParams alp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        alp.leftMargin = dp(6);
+        alp.leftMargin = dp(5);
         appRow.addView(app, alp);
-        FrameLayout.LayoutParams rlp = new FrameLayout.LayoutParams(w, dp(APP_DP), Gravity.BOTTOM | Gravity.START);
-        rlp.leftMargin = textLeft;
-        rlp.bottomMargin = dp(BOTTOM_DP);
-        item.addView(appRow, rlp);
+        LinearLayout.LayoutParams appLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        appLp.topMargin = dp(3);
+        textBlock.addView(appRow, appLp);
+        FrameLayout.LayoutParams textLp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM);
+        textLp.leftMargin = dp(12);
+        textLp.rightMargin = dp(12);
+        textLp.bottomMargin = dp(11);
+        card.addView(textBlock, textLp);
 
         AppleFocus focus = new AppleFocus(item, card, shadow, glare, animations, parallax, reduced);
         focus.setTileSize(w, h);
@@ -550,7 +581,7 @@ final class ContinueRow {
             else title.setAlpha(a);
             if (has) {
                 host.onRowFocused();
-                reveal();
+                if (!hosted) reveal();
             }
         });
         card.setOnClickListener(v -> {
