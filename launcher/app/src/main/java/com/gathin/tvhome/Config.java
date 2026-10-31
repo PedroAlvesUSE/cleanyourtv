@@ -81,7 +81,7 @@ final class Config {
             FEATURE_DOCK_GLOW, false,
             // Later phases.
             "wallpaper_sources", false, "wallpaper_credit", false, "ambient_mode", false,
-            "apple_style", true, "parallax", true, "continue_watching", false, "recents_row", false,
+            "apple_style", true, "parallax", true, "continue_watching", false, "continue_media_session", false, "recents_row", false,
             "top_shelf", false, "clock_weather", false, "greeting", false, "global_search", false,
             "quick_menu", false, "sleep_timer", false, "profiles", false,
             "config_backup", false, "quick_resume", false, "watch_later", false, "owntv_channels", false,
