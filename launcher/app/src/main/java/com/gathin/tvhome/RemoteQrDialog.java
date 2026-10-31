@@ -109,7 +109,7 @@ final class RemoteQrDialog {
         card.addView(side, sideLp);
 
         TextView title = text(34, TEXT);
-        title.setText(R.string.set_phone);
+        title.setText(a.getString(R.string.remote_qr_title, RemoteServer.tvName(a)));
         side.addView(title);
 
         hint = text(18, TEXT_2);

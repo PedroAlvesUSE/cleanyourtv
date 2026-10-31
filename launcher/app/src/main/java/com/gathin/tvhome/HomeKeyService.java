@@ -1,10 +1,12 @@
 package com.gathin.tvhome;
 
 import android.accessibilityservice.AccessibilityService;
+import android.content.ActivityNotFoundException;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.media.AudioManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -16,9 +18,11 @@ import android.view.View;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -58,7 +62,8 @@ public class HomeKeyService extends AccessibilityService {
     /** Botões do controle pelo celular aceitos em {@link #remoteKey}. */
     static final Set<String> REMOTE_KEYS = new HashSet<>(Arrays.asList(
             "up", "down", "left", "right", "ok", "back", "home", "volup", "voldown", "mute",
-            "playpause", "next", "prev", "rewind", "forward"));
+            "playpause", "next", "prev", "rewind", "forward", "options", "input", "settings", "panel", "sleep"));
+    static final String ACTION_VIEW_INPUTS = "com.android.tv.action.VIEW_INPUTS";
     private static final long HOME_LONG_MS = 600;
     private static final long USAGE_REFRESH_MS = 20_000;
     private static volatile HomeKeyService instance;
@@ -254,8 +259,46 @@ public class HomeKeyService extends AccessibilityService {
             case "left": return dpad(View.FOCUS_LEFT, 18);
             case "right": return dpad(View.FOCUS_RIGHT, 19);
             case "ok": return click();
+            case "options": return longClick();
+            case "input": return open(new Intent(ACTION_VIEW_INPUTS));
+            case "settings": return open(new Intent(Settings.ACTION_SETTINGS));
+            case "panel": return open(new Intent(this, QuickSettingsActivity.class)
+                    .putExtra(QuickSettingsActivity.EXTRA_CONTROL_CENTER, true));
+            case "sleep":
+                sleepNow(this);
+                return true;
             default: return media(audio, RemoteApi.mediaKeyCode(key));
         }
+    }
+
+    /** Botões extras que esta TV aceita: a página só mostra estes. */
+    static List<String> extraKeys(Context ctx) {
+        List<String> keys = new ArrayList<>(Arrays.asList("options", "panel"));
+        PackageManager pm = ctx.getPackageManager();
+        if (pm.resolveActivity(new Intent(ACTION_VIEW_INPUTS), 0) != null) keys.add("input");
+        if (pm.resolveActivity(new Intent(Settings.ACTION_SETTINGS), 0) != null) keys.add("settings");
+        if (Build.VERSION.SDK_INT >= 28) keys.add("sleep");
+        return keys;
+    }
+
+    private boolean open(Intent intent) {
+        try {
+            startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            return true;
+        } catch (ActivityNotFoundException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Opções do app: sem root não há como injetar KEYCODE_MENU; o equivalente mais próximo é o toque longo no
+     * item em foco, que abre o menu de contexto nos apps que o têm.
+     */
+    private boolean longClick() {
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        AccessibilityNodeInfo node = root == null ? null : root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
+        while (node != null && !node.isLongClickable()) node = node.getParent();
+        return node != null && node.performAction(AccessibilityNodeInfo.ACTION_LONG_CLICK);
     }
 
     /** Teclas de mídia vão à sessão de mídia ativa pelo AudioManager; não exige root nem injeção de tecla. */
