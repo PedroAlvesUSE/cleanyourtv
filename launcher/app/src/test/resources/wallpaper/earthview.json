@@ -1,0 +1,32 @@
+[
+ {
+  "country": "Australia",
+  "image": "https://www.gstatic.com/prettyearth/assets/full/1003.jpg",
+  "map": "https://www.google.com/maps/@-10.040181,143.560709,12z/data=!3m1!1e3",
+  "region": ""
+ },
+ {
+  "country": "Chile",
+  "image": "https://www.gstatic.com/prettyearth/assets/full/1004.jpg",
+  "map": "https://www.google.com/maps/@-19.140249,-68.683995,15z/data=!3m1!1e3",
+  "region": "Tamarugal"
+ },
+ {
+  "country": "China",
+  "image": "https://www.gstatic.com/prettyearth/assets/full/1006.jpg",
+  "map": "https://www.google.com/maps/@30.109104,84.817876,15z/data=!3m1!1e3",
+  "region": "Ngari"
+ },
+ {
+  "country": "China",
+  "image": "https://www.gstatic.com/prettyearth/assets/full/1007.jpg",
+  "map": "https://www.google.com/maps/@30.248502,85.047215,16z/data=!3m1!1e3",
+  "region": "Ngari"
+ },
+ {
+  "country": "China",
+  "image": "https://www.gstatic.com/prettyearth/assets/full/1008.jpg",
+  "map": "https://www.google.com/maps/@30.349926,85.157309,17z/data=!3m1!1e3",
+  "region": "Ngari"
+ }
+]

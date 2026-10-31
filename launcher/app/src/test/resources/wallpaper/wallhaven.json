@@ -1,0 +1,81 @@
+{
+ "data": [
+  {
+   "id": "qr5dvl",
+   "url": "https://wallhaven.cc/w/qr5dvl",
+   "short_url": "https://whvn.cc/qr5dvl",
+   "views": 592,
+   "favorites": 34,
+   "source": "https://www.pixiv.net/artworks/150084334",
+   "purity": "sfw",
+   "category": "anime",
+   "dimension_x": 3840,
+   "dimension_y": 2160,
+   "resolution": "3840x2160",
+   "ratio": "1.78",
+   "file_size": 12975687,
+   "file_type": "image/png",
+   "created_at": "2026-10-30 09:11:38",
+   "path": "https://w.wallhaven.cc/full/qr/wallhaven-qr5dvl.png",
+   "thumbs": {
+    "large": "https://th.wallhaven.cc/lg/qr/qr5dvl.jpg",
+    "original": "https://th.wallhaven.cc/orig/qr/qr5dvl.jpg",
+    "small": "https://th.wallhaven.cc/small/qr/qr5dvl.jpg"
+   }
+  },
+  {
+   "id": "8gpx6k",
+   "url": "https://wallhaven.cc/w/8gpx6k",
+   "short_url": "https://whvn.cc/8gpx6k",
+   "views": 553,
+   "favorites": 12,
+   "source": "https://www.pixiv.net/artworks/151376571",
+   "purity": "sfw",
+   "category": "anime",
+   "dimension_x": 6945,
+   "dimension_y": 6222,
+   "resolution": "6945x6222",
+   "ratio": "1.12",
+   "file_size": 16110857,
+   "file_type": "image/jpeg",
+   "created_at": "2026-10-30 09:18:17",
+   "path": "https://w.wallhaven.cc/full/8g/wallhaven-8gpx6k.jpg",
+   "thumbs": {
+    "large": "https://th.wallhaven.cc/lg/8g/8gpx6k.jpg",
+    "original": "https://th.wallhaven.cc/orig/8g/8gpx6k.jpg",
+    "small": "https://th.wallhaven.cc/small/8g/8gpx6k.jpg"
+   }
+  },
+  {
+   "id": "rqw7ej",
+   "url": "https://wallhaven.cc/w/rqw7ej",
+   "short_url": "https://whvn.cc/rqw7ej",
+   "views": 489,
+   "favorites": 19,
+   "source": "",
+   "purity": "sfw",
+   "category": "anime",
+   "dimension_x": 4000,
+   "dimension_y": 2250,
+   "resolution": "4000x2250",
+   "ratio": "1.78",
+   "file_size": 1709754,
+   "file_type": "image/jpeg",
+   "created_at": "2026-10-30 03:09:15",
+   "path": "https://w.wallhaven.cc/full/rq/wallhaven-rqw7ej.jpg",
+   "thumbs": {
+    "large": "https://th.wallhaven.cc/lg/rq/rqw7ej.jpg",
+    "original": "https://th.wallhaven.cc/orig/rq/rqw7ej.jpg",
+    "small": "https://th.wallhaven.cc/small/rq/rqw7ej.jpg"
+   }
+  }
+ ],
+ "meta": {
+  "current_page": 1,
+  "last_page": 1,
+  "per_page": 24,
+  "total": 19,
+  "query": null,
+  "seed": null
+ }
+}
