@@ -131,6 +131,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     /** The focus glow's colour while the cinematic shelf tints it, 0 for plain white glass. */
     private int glassAccent;
     private int ambientColor = -1;
+    /** The glow behind the focused dock (config dock_glow); off by default, so the wallpaper stays as it is. */
+    private boolean dockGlow;
     private ValueAnimator ambientAnimator;
     private boolean heroShown;
     private boolean animations;
@@ -320,6 +322,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         heroArt = findViewById(R.id.heroArt);
         cinematic = cfg.cinematicHome;
         ambientTint = cfg.ambientTint;
+        dockGlow = cfg.feature(Config.FEATURE_DOCK_GLOW);
         if (cinematic) setUpCinematicShelf();
         // dock_title false: the name above the dock (and the cinematic lines under it) never shows; the glow
         // still follows the dock.
@@ -1357,6 +1360,12 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     }
 
     private void setAmbient(int color) {
+        if (!dockGlow) {
+            // No glow: the view keeps no background, so fading it in on the dock paints nothing over the wallpaper.
+            ambientColor = color;
+            if (ambient.getBackground() != null) ambient.setBackground(null);
+            return;
+        }
         if (color == ambientColor && ambient.getBackground() != null) return;
         ambientColor = color;
         BitmapDrawable glow = (BitmapDrawable) ambient.getBackground();

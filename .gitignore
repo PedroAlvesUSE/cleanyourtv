@@ -14,3 +14,9 @@ backup/
 *.aab
 launcher/hs_err_pid*.log
 launcher/replay_pid*.log
+
+# planos locais
+.plan/
+
+# worktrees de agentes
+.claude/

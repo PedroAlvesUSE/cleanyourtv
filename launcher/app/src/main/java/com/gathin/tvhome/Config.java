@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -53,6 +54,50 @@ final class Config {
     static final String TRANSITION_NONE = "none";
     static final String TRANSITION_CROSSFADE = "crossfade";
     static final int DOCK_GLASS_OPACITY_DEFAULT = 55;
+    /** Sky strength when the sky switch is on but neither config.xml nor the theme sets one. */
+    static final int SKY_INTENSITY_ON = 60;
+
+    // ---- feature switches ---------------------------------------------------------------------------
+    // One on/off key per function. The built-in default below decides, then config.xml for the switches it
+    // already had, then a boolean of the same name in a theme's config.json, then the choice made on the TV
+    // (launcher_settings). Settings has a row for every key (SettingsCatalog). A switched-off function runs no
+    // code and makes no network request; a key whose function is not built yet is only stored.
+    static final String FEATURE_DOCK_GLOW = "dock_glow";
+    static final String FEATURE_SKY = "sky";
+    static final String FEATURE_MODULE_CARDS = "module_cards";
+    static final String FEATURE_FILL_DOCK = "fill_dock";
+    static final String FEATURE_APP_KEYS = "app_keys";
+    static final String FEATURE_BING = "bing";
+    static final String FEATURE_ANIMATIONS = "animations";
+    static final String FEATURE_ADVANCED_EFFECTS = "advanced_effects";
+
+    /** Every switch and its built-in default, in no particular order. */
+    static final Map<String, Boolean> FEATURES = features(
+            // Functions the launcher already had.
+            FEATURE_SKY, false, DOCK_GLASS_KEY, false, AMBIENT_TINT_KEY, true, FEATURE_MODULE_CARDS, true,
+            FEATURE_FILL_DOCK, true, FEATURE_APP_KEYS, true, FEATURE_BING, true,
+            FEATURE_ANIMATIONS, true, FEATURE_ADVANCED_EFFECTS, false,
+            // Phase 1 on: the white glow behind the focused dock is off unless asked for.
+            FEATURE_DOCK_GLOW, false,
+            // Later phases.
+            "wallpaper_sources", false, "wallpaper_credit", false, "ambient_mode", false,
+            "apple_style", true, "parallax", true, "continue_watching", false, "recents_row", false,
+            "top_shelf", false, "clock_weather", false, "greeting", false, "global_search", false,
+            "quick_menu", false, "sleep_timer", false, "update_badges", false, "profiles", false,
+            "config_backup", false, "quick_resume", false, "watch_later", false, "owntv_channels", false,
+            "phone_remote", false, "night_mode", false, "parental", false, "guest_mode", false,
+            "seasonal_wallpaper", false, "auto_accent", false, "own_screensaver", false, "tv_panel", false,
+            "quick_clean", false, "wallpaper_diag", false, "mic_tizentube", false);
+
+    private static Map<String, Boolean> features(Object... pairs) {
+        Map<String, Boolean> out = new LinkedHashMap<>();
+        for (int i = 0; i < pairs.length; i += 2) {
+            if (out.put((String) pairs[i], (Boolean) pairs[i + 1]) != null) {
+                throw new IllegalStateException("duplicate feature " + pairs[i]);
+            }
+        }
+        return Collections.unmodifiableMap(out);
+    }
 
     final List<String> dockApps;
     /** Grid apps fill the dock slots dock_apps leaves free (config.xml, fill_dock); on by default, false leaves the slots empty. */
@@ -130,6 +175,8 @@ final class Config {
     final List<RaceWeekend.Race> raceCalendar;
     /** Cinematic top shelf (config.xml, cinematic_home): the focused dock app's artwork behind a larger shelf. */
     final boolean cinematicHome;
+    /** Every key of {@link #FEATURES}, resolved (see {@link #feature(String)}). */
+    private final Map<String, Boolean> features;
 
     private Config(List<String> dockApps, boolean fillDock, List<String> hiddenApps, String liveTvPackage,
                    String liveTvAction, Map<String, String> launchActions, Map<String, String> appLabels,
@@ -142,7 +189,7 @@ final class Config {
                    int wallpaperTransitionMs, boolean ambientTint,
                    boolean dockGlass, int dockGlassOpacity, boolean overlayApplied,
                    Festival festival, int[] inputKeycodes, List<String> appKeys,
-                   List<RaceWeekend.Race> raceCalendar, boolean cinematicHome) {
+                   List<RaceWeekend.Race> raceCalendar, boolean cinematicHome, Map<String, Boolean> features) {
         this.inputKeycodes = inputKeycodes;
         this.appKeys = Collections.unmodifiableList(appKeys);
         this.dockApps = Collections.unmodifiableList(dockApps);
@@ -189,6 +236,48 @@ final class Config {
         this.festival = festival;
         this.raceCalendar = Collections.unmodifiableList(raceCalendar);
         this.cinematicHome = cinematicHome;
+        this.features = Collections.unmodifiableMap(features);
+    }
+
+    /** Whether a switch from {@link #FEATURES} is on, as resolved when this Config was loaded. */
+    boolean feature(String key) {
+        Boolean on = features.get(key);
+        return on != null && on;
+    }
+
+    /**
+     * Whether a switch is on right now, without a full {@link #load}: for code that needs one key. Unknown keys
+     * are off.
+     */
+    static boolean feature(Context ctx, String key) {
+        File dir = dir(ctx);
+        Boolean theme = themeFeatures(ctx.getResources(), read(dir == null ? null : new File(dir, FILE_NAME))).get(key);
+        Object tv = ctx.getSharedPreferences(SETTINGS_NAME, Context.MODE_PRIVATE).getAll().get(key);
+        return resolveFeature(theme != null && theme, null, tv);
+    }
+
+    /** The choice made on the TV wins, then the theme's value; anything that is not a boolean is ignored. */
+    static boolean resolveFeature(boolean fallback, Object theme, Object tv) {
+        if (tv instanceof Boolean) return (Boolean) tv;
+        return theme instanceof Boolean ? (Boolean) theme : fallback;
+    }
+
+    /** Built-in defaults, config.xml for the switches it already had, then the theme's booleans. */
+    private static Map<String, Boolean> themeFeatures(Resources res, JSONObject json) {
+        Map<String, Boolean> out = new LinkedHashMap<>(FEATURES);
+        out.put(FEATURE_MODULE_CARDS, res.getBoolean(R.bool.module_cards));
+        out.put(FEATURE_FILL_DOCK, res.getBoolean(R.bool.fill_dock));
+        out.put(FEATURE_ANIMATIONS, res.getBoolean(R.bool.animations));
+        out.put(FEATURE_ADVANCED_EFFECTS, res.getBoolean(R.bool.advanced_effects));
+        int sky = res.getInteger(R.integer.sky_intensity);
+        if (json != null) sky = integer(json, "sky_intensity", sky, 0, 100);
+        out.put(FEATURE_SKY, sky > 0);
+        if (json != null) {
+            for (Map.Entry<String, Boolean> e : out.entrySet()) {
+                e.setValue(resolveFeature(e.getValue(), json.opt(e.getKey()), null));
+            }
+        }
+        return out;
     }
 
     /** URL / Bing land in {@link WallpaperUrls}' on-device cache. */
@@ -301,8 +390,18 @@ final class Config {
         if (chosenColumns >= 4 && chosenColumns <= 7) columns = chosenColumns;
         int chosenRows = choices.getInt(ROWS_BELOW_DOCK_KEY, rowsBelow);
         if (chosenRows >= 0 && chosenRows <= 3) rowsBelow = chosenRows;
-        animations = choices.getBoolean("animations", animations);
-        advancedEffects = choices.getBoolean("advanced_effects", advancedEffects);
+        Map<String, Boolean> features = themeFeatures(res, json);
+        Map<String, ?> tv = choices.getAll();
+        for (Map.Entry<String, Boolean> e : features.entrySet()) {
+            e.setValue(resolveFeature(e.getValue(), null, tv.get(e.getKey())));
+        }
+        animations = features.get(FEATURE_ANIMATIONS);
+        advancedEffects = features.get(FEATURE_ADVANCED_EFFECTS);
+        moduleCards = features.get(FEATURE_MODULE_CARDS);
+        fillDock = features.get(FEATURE_FILL_DOCK);
+        if (!features.get(FEATURE_SKY)) skyIntensity = 0;
+        else if (skyIntensity <= 0) skyIntensity = SKY_INTENSITY_ON;
+        if (!features.get(FEATURE_APP_KEYS)) appKeys = new ArrayList<>();
         File wallpaper = dir != null ? new File(dir, WALLPAPER_NAME) : null;
         if (wallpaper != null && !(wallpaper.isFile() && wallpaper.length() > 0)) wallpaper = null;
         // A theme can also switch the wallpaper off while the file is still there.
@@ -325,6 +424,8 @@ final class Config {
         // An on-TV wallpaper pick overrides the theme: a filename from the wallpapers/
         // collection, or "none". Unset means the theme decides (off by default).
         String wallpaperChoice = choices.getString(WALLPAPER_CHOICE_KEY, null);
+        // Bing switched off: its cached picture is no longer shown either; the theme decides again.
+        if (BingWallpaper.CHOICE.equals(wallpaperChoice) && !features.get(FEATURE_BING)) wallpaperChoice = null;
         if ("none".equals(wallpaperChoice)) {
             wallpapers.clear();
             wallpaper = null;
@@ -355,8 +456,8 @@ final class Config {
         String wallpaperTransition = normalizeWallpaperTransition(
                 choices.getString(WALLPAPER_TRANSITION_KEY, TRANSITION_NONE));
         int wallpaperTransitionMs = WALLPAPER_TRANSITION_MS_DEFAULT;
-        boolean ambientTint = choices.getBoolean(AMBIENT_TINT_KEY, true);
-        boolean dockGlass = choices.getBoolean(DOCK_GLASS_KEY, false);
+        boolean ambientTint = features.get(AMBIENT_TINT_KEY);
+        boolean dockGlass = features.get(DOCK_GLASS_KEY);
         int dockGlassOpacity = clampDockGlassOpacity(
                 choices.getInt(DOCK_GLASS_OPACITY_KEY, DOCK_GLASS_OPACITY_DEFAULT));
         // A festive skin comes only from a theme; config.xml has no festival.
@@ -372,7 +473,7 @@ final class Config {
                 wallpapers, rotationSeconds, wallpaperDim, wallpaperTransition, wallpaperTransitionMs,
                 ambientTint, dockGlass, dockGlassOpacity,
                 applied, festival, inputKeycodes, appKeys,
-                json == null ? Collections.emptyList() : raceCalendar(json), cinematic);
+                json == null ? Collections.emptyList() : raceCalendar(json), cinematic, features);
     }
 
     /**
@@ -424,6 +525,7 @@ final class Config {
 
     /** Keys the settings screen and theme sync clear together (Follow theme / theme push). */
     static SharedPreferences.Editor clearOnTvChoices(SharedPreferences.Editor editor) {
+        for (String key : FEATURES.keySet()) editor.remove(key);
         return editor.remove("columns").remove("animations").remove("advanced_effects")
                 .remove(ROWS_BELOW_DOCK_KEY).remove(WALLPAPER_CHOICE_KEY)
                 .remove(WALLPAPER_ROTATION_KEY).remove(WALLPAPER_ROTATION_MINUTES_LEGACY)
