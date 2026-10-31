@@ -6,12 +6,14 @@ import org.junit.Test;
 
 public class SleepTimerTest {
     @Test
-    public void stepsCycleOffThirtySixtyNinetyOff() {
-        assertEquals(30, SleepTimer.next(0));
+    public void stepsCycleOffOneFifteenThirtySixtyNinetyOff() {
+        assertEquals(1, SleepTimer.next(0));
+        assertEquals(15, SleepTimer.next(1));
+        assertEquals(30, SleepTimer.next(15));
         assertEquals(60, SleepTimer.next(30));
         assertEquals(90, SleepTimer.next(60));
         assertEquals(0, SleepTimer.next(90));
-        assertEquals(30, SleepTimer.next(45));
+        assertEquals(1, SleepTimer.next(45));
     }
 
     @Test
