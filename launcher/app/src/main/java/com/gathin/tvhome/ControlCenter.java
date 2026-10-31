@@ -35,6 +35,10 @@ import androidx.dynamicanimation.animation.SpringForce;
  */
 final class ControlCenter {
     private static final int WIDTH_DP = 380;
+    // Cantos concêntricos: painel de 28 dp com recuo de 12 dp, então as linhas e o bloco de informações têm 16 dp.
+    private static final int PANEL_RADIUS_DP = 28;
+    private static final int INSET_DP = 12;
+    private static final int ITEM_RADIUS_DP = PANEL_RADIUS_DP - INSET_DP;
     private static final int TEXT = 0xFFF5F5F7;
     private static final int TEXT_2 = 0xFFA1A1A6;
 
@@ -79,10 +83,11 @@ final class ControlCenter {
         scroll.setClipToPadding(false);
         list = new LinearLayout(a);
         list.setOrientation(LinearLayout.VERTICAL);
-        list.setPadding((int) (10 * dp), (int) (12 * dp), (int) (10 * dp), (int) (12 * dp));
+        int inset = (int) (INSET_DP * dp);
+        list.setPadding(inset, inset, inset, inset);
         scroll.addView(list);
-        GradientDrawable glass = round(0xD91C1C1E, 28 * dp);
-        glass.setStroke((int) dp, 0x33FFFFFF);
+        GradientDrawable glass = round(0xD91C1C1E, PANEL_RADIUS_DP * dp);
+        glass.setStroke(Math.max(1, (int) dp), 0x1FFFFFFF);
         scroll.setBackground(glass);
         scroll.setClipToOutline(true);
         scroll.setOutlineProvider(android.view.ViewOutlineProvider.BACKGROUND);
@@ -95,7 +100,7 @@ final class ControlCenter {
 
         TextView title = text(24, TEXT);
         title.setText(R.string.cc_title);
-        title.setPadding((int) (14 * dp), (int) (6 * dp), 0, (int) (10 * dp));
+        title.setPadding((int) (14 * dp), (int) (4 * dp), 0, (int) (10 * dp));
         list.addView(title);
 
         // Volume: esquerda e direita mudam, OK silencia.
@@ -156,11 +161,14 @@ final class ControlCenter {
         }
 
         if (panelOn) {
-            TextView info = text(14, TEXT_2);
-            info.setText(SystemInfo.summary(a));
-            info.setLineSpacing(0, 1.25f);
-            info.setPadding((int) (14 * dp), (int) (14 * dp), (int) (14 * dp), (int) (6 * dp));
-            list.addView(info);
+            TextView header = text(14, TEXT_2);
+            header.setText(R.string.set_tv_info);
+            header.setPadding((int) (14 * dp), (int) (18 * dp), 0, (int) (8 * dp));
+            list.addView(header);
+            View info = SystemInfo.panel(a, true);
+            focusScale(info);
+            list.addView(info, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT));
         }
         list.getChildAt(1).requestFocus();
 
@@ -231,7 +239,7 @@ final class ControlCenter {
         return (TextView) ((LinearLayout) row).getChildAt(2);
     }
 
-    /** Linha com ícone, título e estado; foco com fundo #33FFFFFF e escala 1,03 com mola, como em Configurações. */
+    /** Linha com ícone, título e estado; foco com fundo #33FFFFFF (cantos de 16 dp) e escala 1,03 com mola, como em Configurações. */
     private View row(int icon, int title) {
         LinearLayout row = new LinearLayout(a);
         row.setGravity(Gravity.CENTER_VERTICAL);
@@ -239,7 +247,7 @@ final class ControlCenter {
         row.setClickable(true);
         row.setPadding((int) (14 * dp), 0, (int) (14 * dp), 0);
         StateListDrawable bg = new StateListDrawable();
-        bg.addState(new int[]{android.R.attr.state_focused}, round(0x33FFFFFF, 16 * dp));
+        bg.addState(new int[]{android.R.attr.state_focused}, round(0x33FFFFFF, ITEM_RADIUS_DP * dp));
         bg.addState(new int[0], new ColorDrawable(0));
         if (motion) {
             bg.setEnterFadeDuration(150);
@@ -258,9 +266,16 @@ final class ControlCenter {
         TextView st = text(15, TEXT_2);
         st.setSingleLine(true);
         row.addView(st);
-        SpringAnimation sx = spring(row, DynamicAnimation.SCALE_X);
-        SpringAnimation sy = spring(row, DynamicAnimation.SCALE_Y);
-        row.setOnFocusChangeListener((v, focused) -> {
+        focusScale(row);
+        list.addView(row, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (int) (58 * dp)));
+        return row;
+    }
+
+    /** Escala 1,03 com mola no foco. O recuo de 12 dp cabe a escala sem cortar o fundo nos cantos do painel. */
+    private void focusScale(View view) {
+        SpringAnimation sx = spring(view, DynamicAnimation.SCALE_X);
+        SpringAnimation sy = spring(view, DynamicAnimation.SCALE_Y);
+        view.setOnFocusChangeListener((v, focused) -> {
             float scale = focused ? 1.03f : 1f;
             if (motion) {
                 sx.animateToFinalPosition(scale);
@@ -270,8 +285,6 @@ final class ControlCenter {
                 v.setScaleY(scale);
             }
         });
-        list.addView(row, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (int) (58 * dp)));
-        return row;
     }
 
     private SpringAnimation spring(View v, DynamicAnimation.ViewProperty property) {

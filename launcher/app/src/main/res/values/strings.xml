@@ -201,7 +201,7 @@
     <string name="set_night">Night mode</string>
     <string name="set_night_d">A darker, warmer Home at night.</string>
     <string name="set_sleep">Sleep timer</string>
-    <string name="set_sleep_d">Turns the TV off after 30, 60 or 90 minutes. Set it in the quick menu.</string>
+    <string name="set_sleep_d">Turns the TV off after 1, 15, 30, 60 or 90 minutes. Set it in the quick menu.</string>
     <string name="set_saver">Screen Saver and Ambient</string>
     <string name="set_saver_d">What the TV shows while nobody uses it.</string>
     <string name="set_ambient">Ambient mode</string>
@@ -263,6 +263,8 @@
     <string name="info_network">Network</string>
     <string name="info_free_of">%1$s free of %2$s</string>
     <string name="info_versions">Android %1$s · launcher %2$s</string>
+    <string name="info_android">Android</string>
+    <string name="info_launcher">Launcher</string>
     <string name="minutes">%1$d min</string>
     <string name="turn_on_first">Turn this function on first.</string>
     <string name="backup_hint">On your phone, open this address:</string>

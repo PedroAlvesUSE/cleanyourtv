@@ -7,7 +7,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 
 /**
- * Temporizador para desligar (sleep_timer): desligado, 30, 60 ou 90 minutos. O prazo fica em
+ * Temporizador para desligar (sleep_timer): desligado, 1 (para teste), 15, 30, 60 ou 90 minutos. O prazo fica em
  * launcher_settings (chave sleep_deadline, em ms de relógio) e um alarme chama {@link SleepReceiver}.
  * Ao expirar, o serviço de acessibilidade bloqueia a tela (ver HomeKeyService.sleepNow).
  */
@@ -15,11 +15,11 @@ final class SleepTimer {
     static final String FEATURE = "sleep_timer";
     static final String DEADLINE_KEY = "sleep_deadline";
     static final String MINUTES_KEY = "sleep_minutes";
-    static final int[] STEPS = {0, 30, 60, 90};
+    static final int[] STEPS = {0, 1, 15, 30, 60, 90};
 
     private SleepTimer() { }
 
-    /** Próximo passo do ciclo desligado, 30, 60, 90, desligado. Valor fora da lista volta para 30. */
+    /** Próximo passo do ciclo desligado, 1, 15, 30, 60, 90, desligado. Valor fora da lista volta para 1. */
     static int next(int minutes) {
         for (int i = 0; i < STEPS.length; i++) if (STEPS[i] == minutes) return STEPS[(i + 1) % STEPS.length];
         return STEPS[1];
@@ -52,7 +52,7 @@ final class SleepTimer {
         return d > System.currentTimeMillis() ? d : 0;
     }
 
-    /** Passo escolhido (30, 60, 90) enquanto o temporizador corre; 0 sem temporizador. */
+    /** Passo escolhido (1, 15, 30, 60, 90) enquanto o temporizador corre; 0 sem temporizador. */
     static int minutes(Context ctx) {
         return deadline(ctx) > 0 ? prefs(ctx).getInt(MINUTES_KEY, 0) : 0;
     }

@@ -9,6 +9,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.text.InputType;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.Toast;
 
 import java.util.ArrayList;
@@ -79,7 +80,11 @@ final class SystemActions {
             return;
         }
         if (TV_INFO.equals(key)) {
-            new AlertDialog.Builder(a).setTitle(R.string.set_tv_info).setMessage(SystemInfo.summary(a))
+            int pad = (int) (12 * a.getResources().getDisplayMetrics().density);
+            FrameLayout box = new FrameLayout(a);
+            box.setPadding(pad, pad, pad, 0);
+            box.addView(SystemInfo.panel(a, false));
+            new AlertDialog.Builder(a).setTitle(R.string.set_tv_info).setView(box)
                     .setPositiveButton(android.R.string.ok, null).show();
         } else if (CLEAN_NOW.equals(key)) {
             Toast.makeText(a, R.string.cc_cleaning, Toast.LENGTH_SHORT).show();

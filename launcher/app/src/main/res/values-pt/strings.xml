@@ -184,7 +184,7 @@
     <string name="set_night">Modo noite</string>
     <string name="set_night_d">Uma tela inicial mais escura e quente à noite.</string>
     <string name="set_sleep">Temporizador</string>
-    <string name="set_sleep_d">Desliga a TV depois de 30, 60 ou 90 minutos. Ajuste no menu rápido.</string>
+    <string name="set_sleep_d">Desliga a TV depois de 1, 15, 30, 60 ou 90 minutos. Ajuste no menu rápido.</string>
     <string name="set_saver">Protetor de tela e modo ambiente</string>
     <string name="set_saver_d">O que a TV mostra quando ninguém a usa.</string>
     <string name="set_ambient">Modo ambiente</string>
@@ -246,6 +246,8 @@
     <string name="info_network">Rede</string>
     <string name="info_free_of">%1$s livres de %2$s</string>
     <string name="info_versions">Android %1$s · launcher %2$s</string>
+    <string name="info_android">Android</string>
+    <string name="info_launcher">Launcher</string>
     <string name="minutes">%1$d min</string>
     <string name="turn_on_first">Ligue esta função primeiro.</string>
     <string name="backup_hint">No celular, abra este endereço:</string>
