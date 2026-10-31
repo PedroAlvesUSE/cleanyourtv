@@ -69,7 +69,7 @@ public class SettingsCatalogTest {
         for (String built : new String[]{Config.FEATURE_DOCK_GLOW, Config.FEATURE_SKY, Config.DOCK_GLASS_KEY,
                 Config.AMBIENT_TINT_KEY, Config.FEATURE_MODULE_CARDS, Config.FEATURE_FILL_DOCK,
                 Config.FEATURE_APP_KEYS, Config.FEATURE_BING, Config.FEATURE_ANIMATIONS,
-                Config.FEATURE_ADVANCED_EFFECTS}) {
+                Config.FEATURE_ADVANCED_EFFECTS, Apple.STYLE, Apple.PARALLAX, Apple.TOP_SHELF, Apple.AUTO_ACCENT}) {
             for (SettingRow row : all()) if (built.equals(row.key)) assertFalse(built, row.soon);
         }
     }

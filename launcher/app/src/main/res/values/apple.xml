@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tokens do visual Apple tvOS (apple_style). As mesmas cores da tela de Configurações. -->
+<resources>
+    <color name="apple_background">#FF000000</color>
+    <color name="apple_text">#FFF5F5F7</color>
+    <color name="apple_text_secondary">#FFA1A1A6</color>
+    <color name="apple_glass">#33FFFFFF</color>
+    <color name="apple_glass_border">#1FFFFFFF</color>
+    <color name="apple_text_shadow">#8C000000</color>
+
+    <dimen name="apple_card_radius">16dp</dimen>
+    <dimen name="apple_bar_radius">28dp</dimen>
+    <!-- Elevação do bloco em foco: sobe 6dp, e a sombra desenhada cai abaixo dele. -->
+    <dimen name="apple_focus_lift">6dp</dimen>
+</resources>

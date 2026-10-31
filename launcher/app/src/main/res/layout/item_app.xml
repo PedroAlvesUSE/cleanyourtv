@@ -7,6 +7,16 @@
     android:clipChildren="false"
     android:clipToPadding="false">
 
+    <!-- apple_style: the soft shadow under the focused tile, sized and shown in code. -->
+    <View
+        android:id="@+id/shadow"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_gravity="center_horizontal|top"
+        android:alpha="0"
+        android:visibility="gone"
+        android:importantForAccessibility="no" />
+
     <FrameLayout
         android:id="@+id/card"
         android:layout_width="180dp"
@@ -46,6 +56,15 @@
             android:textColor="#FFFFFFFF"
             android:textSize="13sp"
             android:fontFamily="@font/outfit"
+            android:visibility="gone" />
+
+        <!-- apple_style: the specular light on the focused artwork; twice the tile's size, set in code. -->
+        <com.gathin.tvhome.GlareView
+            android:id="@+id/glare"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_gravity="center"
+            android:alpha="0"
             android:visibility="gone" />
     </FrameLayout>
 

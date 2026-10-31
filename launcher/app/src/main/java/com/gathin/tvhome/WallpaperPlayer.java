@@ -46,6 +46,8 @@ final class WallpaperPlayer {
     private boolean transitioning;
     private String displayed = "";
     private Bitmap shown;
+    /** Told about each picture once it is on screen (apple_style: dock glass and auto_accent). */
+    private java.util.function.Consumer<Bitmap> onShown;
 
     private final Runnable poll = new Runnable() {
         @Override
@@ -193,6 +195,13 @@ final class WallpaperPlayer {
         Bitmap previous = shown;
         shown = bitmap;
         recycleQuietly(previous, bitmap);
+        if (onShown != null) onShown.accept(bitmap);
+    }
+
+    /** Calls the listener now with the picture on screen (if any), then after every change. */
+    void setOnShown(java.util.function.Consumer<Bitmap> listener) {
+        onShown = listener;
+        if (listener != null && shown != null && !shown.isRecycled()) listener.accept(shown);
     }
 
     private static void recycleQuietly(Bitmap old, Bitmap keep) {
