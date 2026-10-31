@@ -18,10 +18,18 @@ import android.widget.Toast;
  * closes the panel.
  */
 public final class QuickSettingsActivity extends Activity {
+    /** Home longo (quick_menu): abre o painel rápido de vidro à direita no lugar da lista do botão Settings. */
+    static final String EXTRA_CONTROL_CENTER = "control_center";
+
+    private ControlCenter controlCenter;
 
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
+        if (getIntent().getBooleanExtra(EXTRA_CONTROL_CENTER, false)) {
+            controlCenter = ControlCenter.show(this);
+            return;
+        }
         setContentView(R.layout.activity_quick_settings);
         findViewById(R.id.scrim).setOnClickListener(v -> finish());
         LinearLayout rows = findViewById(R.id.rows);
@@ -34,6 +42,18 @@ public final class QuickSettingsActivity extends Activity {
         addRow(rows, R.drawable.ic_home_settings, R.string.launcher_settings, 0,
                 new Intent(this, MainActivity.class).setAction(MainActivity.ACTION_LAUNCHER_SETTINGS));
         rows.getChildAt(0).requestFocus();
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (controlCenter != null) controlCenter.close();
+        else super.onBackPressed();
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (controlCenter != null) controlCenter.stop();
+        super.onDestroy();
     }
 
     /** Settings pressed again while the panel is up. */

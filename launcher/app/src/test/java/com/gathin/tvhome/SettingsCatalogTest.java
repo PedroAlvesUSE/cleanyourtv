@@ -71,7 +71,9 @@ public class SettingsCatalogTest {
                 Config.FEATURE_APP_KEYS, Config.FEATURE_BING, Config.FEATURE_ANIMATIONS,
                 Config.FEATURE_ADVANCED_EFFECTS,
                 "wallpaper_sources", "wallpaper_credit", "wallpaper_diag", "seasonal_wallpaper",
-                Apple.STYLE, Apple.PARALLAX, Apple.TOP_SHELF, Apple.AUTO_ACCENT}) {
+                Apple.STYLE, Apple.PARALLAX, Apple.TOP_SHELF, Apple.AUTO_ACCENT,
+                "mic_tizentube", "quick_menu", "sleep_timer", "tv_panel", "quick_clean", "config_backup",
+                "phone_remote", "parental", "guest_mode"}) {
             for (SettingRow row : all()) if (built.equals(row.key)) assertFalse(built, row.soon);
         }
     }
@@ -89,6 +91,19 @@ public class SettingsCatalogTest {
         assertTrue(Config.FEATURES.get(Config.AMBIENT_TINT_KEY));
         assertFalse(Config.FEATURES.get(Config.DOCK_GLASS_KEY));
         assertTrue(Config.FEATURES.get(Config.FEATURE_BING));
+    }
+
+    @Test
+    public void updateBadgesHaveNoRowBecauseThePlayStoreHidesPendingUpdates() {
+        assertFalse(Config.FEATURES.containsKey("update_badges"));
+    }
+
+    @Test
+    public void systemFunctionsStayOffAndPhoneRemoteNeedsAnOptIn() {
+        for (String key : new String[]{"mic_tizentube", "quick_menu", "sleep_timer", "tv_panel", "quick_clean",
+                "config_backup", "phone_remote", "parental", "guest_mode"}) {
+            assertFalse(key, Config.FEATURES.get(key));
+        }
     }
 
     @Test

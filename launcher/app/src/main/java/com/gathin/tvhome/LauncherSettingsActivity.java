@@ -381,7 +381,7 @@ public final class LauncherSettingsActivity extends Activity {
                 if (SettingsCatalog.LICENSE.equals(row.key)) return LICENSE;
                 if (SettingsCatalog.PROJECT.equals(row.key)) return PROJECT;
                 if (SettingsCatalog.FOLLOW_THEME.equals(row.key)) return hasOnTvChoices() ? "" : "\u2713";
-                return "";
+                return SystemActions.value(this, row.key);
             default:
                 return "";
         }
@@ -484,21 +484,28 @@ public final class LauncherSettingsActivity extends Activity {
                 break;
             case SettingsCatalog.BOOL:
                 if (dim(it)) return;
-                boolean on = !isOn(row.key);
-                SharedPreferences.Editor edit = choices.edit().putBoolean(row.key, on);
-                // Advanced effects need animations; switching those off switches both off, as before.
-                if (Config.FEATURE_ANIMATIONS.equals(row.key) && !on) edit.putBoolean(Config.FEATURE_ADVANCED_EFFECTS, false);
-                boolean sourcesKey = SourcesWallpaper.FEATURE.equals(row.key);
-                // A new search on the next Home start picks up the change.
-                if (sourcesKey || "seasonal_wallpaper".equals(row.key)) edit.remove(SourcesWallpaper.DATE_KEY);
-                edit.apply();
-                if (sourcesKey && !on) SourcesWallpaper.deleteCache(this);
-                // Bing or the 4K sources off drop their wallpaper, so the preview and backdrop need the new Config.
-                changed(Config.FEATURE_BING.equals(row.key) || sourcesKey);
+                // Com PIN definido, ligar ou desligar o controle parental pede o PIN.
+                if (SystemActions.guard(this, row.key, () -> toggle(row))) break;
+                toggle(row);
                 break;
             default:
                 action(row.key);
         }
+    }
+
+    private void toggle(SettingRow row) {
+        boolean on = !isOn(row.key);
+        SharedPreferences.Editor edit = choices.edit().putBoolean(row.key, on);
+        // Advanced effects need animations; switching those off switches both off, as before.
+        if (Config.FEATURE_ANIMATIONS.equals(row.key) && !on) edit.putBoolean(Config.FEATURE_ADVANCED_EFFECTS, false);
+        boolean sourcesKey = SourcesWallpaper.FEATURE.equals(row.key);
+        // A new search on the next Home start picks up the change.
+        if (sourcesKey || "seasonal_wallpaper".equals(row.key)) edit.remove(SourcesWallpaper.DATE_KEY);
+        edit.apply();
+        if (sourcesKey && !on) SourcesWallpaper.deleteCache(this);
+        // Bing or the 4K sources off drop their wallpaper, so the preview and backdrop need the new Config.
+        changed(Config.FEATURE_BING.equals(row.key) || sourcesKey);
+        SystemActions.toggled(this, row.key, on, () -> changed(false));
     }
 
     private void pick(Item option) {
@@ -541,6 +548,13 @@ public final class LauncherSettingsActivity extends Activity {
     }
 
     /** Something was saved: Home rebuilds on return, and the rows on screen show the new values. */
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        // Backup importado: as escolhas e o config.json mudaram.
+        if (requestCode == SystemActions.REQUEST_BACKUP && resultCode == RESULT_OK) changed(true);
+    }
+
     private void changed(boolean reload) {
         setResult(RESULT_OK);
         if (reload) config = Config.load(this);
@@ -666,6 +680,8 @@ public final class LauncherSettingsActivity extends Activity {
             start(tvSettingsIntent());
         } else if (SettingsCatalog.SCREENSAVER.equals(key)) {
             start(new Intent(Settings.ACTION_DREAM_SETTINGS));
+        } else if (SystemActions.handles(key)) {
+            SystemActions.run(this, key, () -> changed(false));
         }
     }
 
