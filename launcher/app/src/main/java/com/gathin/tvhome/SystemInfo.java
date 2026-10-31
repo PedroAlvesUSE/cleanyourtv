@@ -2,6 +2,7 @@ package com.gathin.tvhome;
 
 import android.app.ActivityManager;
 import android.content.Context;
+import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.StateListDrawable;
 import android.net.wifi.WifiInfo;
@@ -14,7 +15,6 @@ import android.text.format.Formatter;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.ViewOutlineProvider;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -74,8 +74,9 @@ final class SystemInfo {
 
     /**
      * Lista agrupada no estilo do tvOS: um bloco de vidro com cantos de 16 dp, rótulo à esquerda (#F5F5F7),
-     * valor à direita (#A1A1A6) e separadores de 1 px recuados até o texto. Com {@code focusable}, o bloco
-     * recebe o foco (para o ScrollView chegar até ele) e acende como as linhas do painel rápido.
+     * valor à direita (#A1A1A6) e separadores de 1 px recuados até o texto. Com {@code focusable}, cada linha
+     * recebe o foco com fundo opaco de 16 dp e esconde os separadores vizinhos; o bloco não recorta, então a
+     * linha em foco (escala e elevação no ControlCenter) fica sobreposta à borda do grupo.
      */
     static View panel(Context ctx, boolean focusable) {
         float dp = ctx.getResources().getDisplayMetrics().density;
@@ -87,25 +88,38 @@ final class SystemInfo {
                 {ctx.getString(R.string.info_launcher), launcherVersion(ctx)}};
         LinearLayout group = new LinearLayout(ctx);
         group.setOrientation(LinearLayout.VERTICAL);
-        StateListDrawable bg = new StateListDrawable();
-        if (focusable) bg.addState(new int[]{android.R.attr.state_focused}, glass(0x33FFFFFF, dp));
-        bg.addState(new int[0], glass(0x1AFFFFFF, dp));
-        group.setBackground(bg);
-        group.setClipToOutline(true);
-        group.setOutlineProvider(ViewOutlineProvider.BACKGROUND);
-        group.setFocusable(focusable);
+        group.setBackground(glass(0x1AFFFFFF, dp, true));
+        group.setClipChildren(false);
+        group.setClipToPadding(false);
         int pad = (int) (14 * dp);
+        View[] lines = new View[rows.length + 1];
         for (int i = 0; i < rows.length; i++) {
             if (i > 0) {
                 View line = new View(ctx);
                 line.setBackgroundColor(0x1FFFFFFF);
                 LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 1);
                 lp.setMarginStart(pad);
+                lp.setMarginEnd(pad);
                 group.addView(line, lp);
+                lines[i] = line;
             }
             LinearLayout row = new LinearLayout(ctx);
             row.setGravity(Gravity.CENTER_VERTICAL);
             row.setPadding(pad, 0, pad, 0);
+            if (focusable) {
+                row.setFocusable(true);
+                StateListDrawable bg = new StateListDrawable();
+                bg.addState(new int[]{android.R.attr.state_focused}, glass(ControlCenter.FOCUS_FILL, dp, false));
+                bg.addState(new int[0], new ColorDrawable(0));
+                row.setBackground(bg);
+                View above = lines[i];
+                int index = i;
+                row.setOnFocusChangeListener((v, focused) -> {
+                    int vis = focused ? View.INVISIBLE : View.VISIBLE;
+                    if (above != null) above.setVisibility(vis);
+                    if (index + 1 < lines.length && lines[index + 1] != null) lines[index + 1].setVisibility(vis);
+                });
+            }
             TextView label = infoText(ctx, 16, 0xFFF5F5F7, R.font.outfit_medium);
             label.setText(rows[i][0]);
             row.addView(label);
@@ -120,14 +134,13 @@ final class SystemInfo {
         return group;
     }
 
-    private static GradientDrawable glass(int color, float dp) {
+    private static GradientDrawable glass(int color, float dp, boolean border) {
         GradientDrawable g = new GradientDrawable();
         g.setColor(color);
         g.setCornerRadius(16 * dp);
-        g.setStroke(Math.max(1, (int) dp), 0x1FFFFFFF);
+        if (border) g.setStroke(Math.max(1, (int) dp), 0x1FFFFFFF);
         return g;
     }
-
     private static TextView infoText(Context ctx, int sp, int color, int font) {
         TextView t = new TextView(ctx);
         t.setTextSize(sp);
