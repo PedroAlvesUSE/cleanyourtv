@@ -57,7 +57,8 @@ public class HomeKeyService extends AccessibilityService {
 
     /** Botões do controle pelo celular aceitos em {@link #remoteKey}. */
     static final Set<String> REMOTE_KEYS = new HashSet<>(Arrays.asList(
-            "up", "down", "left", "right", "ok", "back", "home", "volup", "voldown", "mute"));
+            "up", "down", "left", "right", "ok", "back", "home", "volup", "voldown", "mute",
+            "playpause", "next", "prev", "rewind", "forward"));
     private static final long HOME_LONG_MS = 600;
     private static final long USAGE_REFRESH_MS = 20_000;
     private static volatile HomeKeyService instance;
@@ -253,8 +254,16 @@ public class HomeKeyService extends AccessibilityService {
             case "left": return dpad(View.FOCUS_LEFT, 18);
             case "right": return dpad(View.FOCUS_RIGHT, 19);
             case "ok": return click();
-            default: return false;
+            default: return media(audio, RemoteApi.mediaKeyCode(key));
         }
+    }
+
+    /** Teclas de mídia vão à sessão de mídia ativa pelo AudioManager; não exige root nem injeção de tecla. */
+    private static boolean media(AudioManager audio, int code) {
+        if (code == 0) return false;
+        audio.dispatchMediaKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, code));
+        audio.dispatchMediaKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, code));
+        return true;
     }
 
     /** Android 13+ tem as ações de D-pad prontas (GLOBAL_ACTION_DPAD_*). Antes, procura o próximo nó com foco. */

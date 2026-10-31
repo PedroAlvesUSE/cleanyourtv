@@ -172,7 +172,7 @@
     <string name="set_quick_menu">Menu rápido</string>
     <string name="set_quick_menu_d">Segure Home para abrir volume, entradas, temporizador, Wi-Fi e protetor de tela.</string>
     <string name="set_phone">Controle pelo celular</string>
-    <string name="set_phone_d">Abre uma página na rede local com D-pad, texto e links. Exige PIN. Desligado por padrão.</string>
+    <string name="set_phone_d">Abre uma página na rede local com touchpad, teclas de mídia, busca, apps e texto. Exige PIN. Desligado por padrão.</string>
     <string name="set_family">Casa e família</string>
     <string name="set_family_d">Perfis, limites e a TV à noite.</string>
     <string name="set_profiles">Perfis</string>
@@ -270,8 +270,11 @@
     <string name="set_parental_limit">Limite diário</string>
     <string name="set_parental_limit_d">Depois deste tempo de uso hoje, todo app pede o PIN. Exige: appops set com.gathin.tvhome GET_USAGE_STATS allow.</string>
     <string name="set_remote_info">Endereço do controle pelo celular</string>
-    <string name="set_remote_info_d">Mostra o endereço e o PIN da página do celular.</string>
-    <string name="remote_info">Abra %1$s no celular, na mesma rede.\n\nPIN: %2$s</string>
+    <string name="set_remote_info_d">Mostra um QR code que abre o controle no celular sem digitar, mais o endereço e o PIN.</string>
+    <string name="remote_qr_hint">Aponte a câmera do celular para o código. O controle abre sem digitar nada.</string>
+    <string name="remote_qr_or">Ou abra este endereço na mesma rede:</string>
+    <string name="remote_done">Concluído</string>
+    <string name="remote_waiting">Ligando o servidor…</string>
     <string name="remote_off">O servidor está desligado. Ligue a função e ative o serviço de acessibilidade da tecla Home.</string>
     <string name="remote_new_pin">Novo PIN</string>
     <string name="set_tv_info">Informações da TV</string>

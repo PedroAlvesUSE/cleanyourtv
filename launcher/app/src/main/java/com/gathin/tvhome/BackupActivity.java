@@ -59,7 +59,7 @@ public final class BackupActivity extends Activity implements LanServer.Handler 
         }
         root.addView(text, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
 
-        boolean[][] qr = url == null ? null : Qr.encode(url);
+        boolean[][] qr = url == null ? null : Qr.encode(RemoteApi.pairUrl(url, pin));
         if (qr != null) {
             ImageView img = new ImageView(this);
             img.setImageBitmap(bitmap(qr));

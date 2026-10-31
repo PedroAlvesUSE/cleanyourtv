@@ -1,22 +1,38 @@
 package com.gathin.tvhome;
 
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.drawable.Drawable;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.security.SecureRandom;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
- * Controle pelo celular (phone_remote): página web na rede local com D-pad, OK, Voltar, Home, volume, texto
- * e envio de link. Desligado por padrão. Só roda com a opção ligada e o serviço de acessibilidade ativo (o
+ * Controle pelo celular (phone_remote): página web na rede local com touchpad (setas e OK), Voltar, Home,
+ * volume, mudo, teclas de mídia, busca no TizenTube, lista de apps, texto e envio de link. Desligado por padrão. Só roda com a opção ligada e o serviço de acessibilidade ativo (o
  * HomeKeyService liga e desliga o servidor). Exige o PIN de 4 dígitos mostrado na TV.
  */
 final class RemoteServer implements LanServer.Handler {
     static final String FEATURE = "phone_remote";
     static final String PIN_KEY = "phone_remote_pin";
     static final int PORT = 8765;
+    private static final int ICON_PX = 96;
+    private static final long APPS_TTL_MS = 30_000;
 
     private static RemoteServer current;
 
@@ -25,6 +41,8 @@ final class RemoteServer implements LanServer.Handler {
     private final LanServer server = new LanServer(this);
     private final Handler main = new Handler(Looper.getMainLooper());
     private int port;
+    private Map<String, String> apps;
+    private long appsAt;
 
     private RemoteServer(Context app, String pin) {
         this.app = app;
@@ -79,6 +97,11 @@ final class RemoteServer implements LanServer.Handler {
         return current == null || ip == null ? null : "http://" + ip + ":" + current.port;
     }
 
+    /** A URL do QR, que já leva o PIN; null se o servidor está desligado ou sem rede. */
+    static String pairUrl(Context ctx) {
+        return RemoteApi.pairUrl(url(), pin(ctx));
+    }
+
     @Override
     public LanServer.Response handle(LanServer.Request r) {
         if (r.method.equals("GET") && r.path.equals("/")) return LanServer.Response.text(200, "text/html", WebPages.remote());
@@ -112,6 +135,81 @@ final class RemoteServer implements LanServer.Handler {
             main.post(() -> MicSearch.openLink(app, url));
             return LanServer.Response.ok("ok");
         }
+        if (r.path.equals("/api/search") && r.method.equals("POST")) {
+            String term = RemoteApi.searchTerm(r.bodyText());
+            if (term == null) return LanServer.Response.error(400, "search");
+            main.post(() -> MicSearch.open(app, term));
+            return LanServer.Response.ok("ok");
+        }
+        if (r.path.equals("/api/apps") && r.method.equals("GET")) {
+            List<String[]> list = new ArrayList<>();
+            for (Map.Entry<String, String> e : apps().entrySet()) list.add(new String[]{e.getKey(), e.getValue()});
+            return LanServer.Response.text(200, "application/json", RemoteApi.appsJson(list));
+        }
+        if (r.path.equals("/api/icon") && r.method.equals("GET")) {
+            String pkg = r.query.get("p");
+            if (!RemoteApi.validPackage(pkg) || !apps().containsKey(pkg)) return LanServer.Response.error(404, "app");
+            byte[] png = icon(pkg);
+            return png == null ? LanServer.Response.error(404, "icon") : new LanServer.Response(200, "image/png", png);
+        }
+        if (r.path.equals("/api/open") && r.method.equals("POST")) {
+            String pkg = r.query.get("p");
+            if (!RemoteApi.validPackage(pkg) || !apps().containsKey(pkg)) return LanServer.Response.error(404, "app");
+            main.post(() -> RemoteKeys.launch(app, pkg));
+            return LanServer.Response.ok("ok");
+        }
         return LanServer.Response.error(404, "not found");
+    }
+
+    /**
+     * Os apps da grade do launcher (TV mais os adicionados, sem os ocultos e os removidos), em ordem de nome.
+     * Com o controle parental ligado, os apps protegidos ficam fora. Guardado por 30 s.
+     */
+    private synchronized Map<String, String> apps() {
+        long now = SystemClock.elapsedRealtime();
+        if (apps != null && now - appsAt < APPS_TTL_MS) return apps;
+        PackageManager pm = app.getPackageManager();
+        Config config = Config.load(app);
+        Set<String> hidden = new HashSet<>(config.hiddenApps);
+        if (config.feature(Parental.FEATURE) && Parental.hasPin(app)) hidden.addAll(Parental.apps(app));
+        Set<String> added = LibraryApps.load(app);
+        Set<String> removed = LibraryApps.loadRemoved(app);
+        Set<String> tv = new HashSet<>();
+        List<ResolveInfo> found = new ArrayList<>(pm.queryIntentActivities(
+                new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER), 0));
+        for (ResolveInfo ri : found) tv.add(ri.activityInfo.packageName);
+        for (ResolveInfo ri : pm.queryIntentActivities(new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)) {
+            if (added.contains(ri.activityInfo.packageName)) found.add(ri);
+        }
+        List<String[]> list = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (ResolveInfo ri : found) {
+            String pkg = ri.activityInfo.packageName;
+            if (pkg.equals(app.getPackageName()) || !ri.activityInfo.exported || !seen.add(pkg)
+                    || !LibraryApps.visible(tv.contains(pkg), hidden.contains(pkg), added.contains(pkg), removed.contains(pkg))) continue;
+            list.add(new String[]{pkg, Cards.cleanLabel(String.valueOf(ri.loadLabel(pm)), pkg)});
+        }
+        list.sort((a, b) -> a[1].compareToIgnoreCase(b[1]));
+        Map<String, String> map = new LinkedHashMap<>();
+        for (String[] a : list) map.put(a[0], a[1]);
+        apps = map;
+        appsAt = now;
+        return map;
+    }
+
+    /** O ícone do app em PNG de 96 px. */
+    private byte[] icon(String pkg) {
+        try {
+            Drawable d = app.getPackageManager().getApplicationIcon(pkg);
+            Bitmap b = Bitmap.createBitmap(ICON_PX, ICON_PX, Bitmap.Config.ARGB_8888);
+            d.setBounds(0, 0, ICON_PX, ICON_PX);
+            d.draw(new Canvas(b));
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            b.compress(Bitmap.CompressFormat.PNG, 100, out);
+            b.recycle();
+            return out.toByteArray();
+        } catch (PackageManager.NameNotFoundException | RuntimeException e) {
+            return null;
+        }
     }
 }
