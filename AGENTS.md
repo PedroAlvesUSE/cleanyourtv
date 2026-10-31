@@ -11,9 +11,10 @@ Launcher Android TV em Java (`launcher/`, pacote `com.gathin.tvhome`).
 
 ## Subagentes
 
-- Não use Haiku neste projeto. A prioridade é a maior qualidade visual e de animação. Esta regra prevalece sobre a regra global.
+- A prioridade é a maior qualidade visual e de animação.
 - Use Opus (`anthropic/claude-opus-5-5`) para visual, animação e revisão de capturas.
-- Use Sonnet (`anthropic/claude-sonnet-5-5`) para lógica, testes, build e tarefas operacionais.
+- Use Sonnet (`anthropic/claude-sonnet-5-5`) para lógica e implementação com regra de negócio.
+- Use Haiku (`anthropic/claude-haiku-5-5`) só em tarefas fáceis: build, testes, instalação na TV, buscas e edições com instruções exatas.
 
 ## Build
 

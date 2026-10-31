@@ -15,11 +15,16 @@ import java.util.ArrayList;
  */
 public final class MicSearchActivity extends Activity {
     private static final int REQUEST = 1;
+    private static final String GOOGLE_ASSISTANT = "com.google.android.katniss";
 
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
         if (state != null) return;
+        if (!Config.feature(this, "mic_tizentube")) {
+            forwardToGoogle();
+            return;
+        }
         Intent speech = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
                 .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 .putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-BR")
@@ -31,6 +36,19 @@ public final class MicSearchActivity extends Activity {
             RemoteKeys.launch(this, MicSearch.TIZENTUBE);
             finish();
         }
+    }
+
+    /** Com a opção desligada, o botão volta ao assistente da TV, mesmo com o launcher no papel de assistente. */
+    private void forwardToGoogle() {
+        Intent assist = new Intent(Intent.ACTION_ASSIST).setPackage(GOOGLE_ASSISTANT)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        if (getIntent() != null && getIntent().getExtras() != null) assist.putExtras(getIntent().getExtras());
+        try {
+            startActivity(assist);
+        } catch (ActivityNotFoundException | SecurityException ignored) {
+        }
+        finish();
+        overridePendingTransition(0, 0);
     }
 
     @Override

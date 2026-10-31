@@ -6,6 +6,7 @@ import android.graphics.Canvas;
 import android.graphics.LinearGradient;
 import android.graphics.Matrix;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.Shader;
@@ -17,8 +18,10 @@ import androidx.recyclerview.widget.RecyclerView;
 /** Draws the tvOS style lighter band behind the first (dock) row and adds a gap below it. */
 public class DockDecoration extends RecyclerView.ItemDecoration {
 
-    /** apple_style: the glass bar reaches this far above and below the dock tiles (dp). */
+    /** apple_style: about how far the glass bar reaches above and below the dock tiles (dp), for layout outside. */
     static final float BAR_PAD_DP = 19f;
+    /** apple_style: the gap between a focused (grown, risen) tile and the rim, the same on every side (dp). */
+    static final float FOCUS_GAP_DP = 12f, MIN_GAP_DP = 6f;
 
     private final int dockSize;
     private final float density;
@@ -40,9 +43,13 @@ public class DockDecoration extends RecyclerView.ItemDecoration {
     /** The bar's height when the gradients were last built (they are moved, not rebuilt, as the grid scrolls). */
     private float shadedHeight = Float.NaN;
     private final Matrix shadeMatrix = new Matrix();
+    private final Path barPath = new Path();
+    private final float[] radii = new float[8];
     /** res/values/apple.xml tokens, read on the first draw (the decoration has no Context of its own). */
-    private float barRadius;
+    private float focusLift = -1f;
     private int glassColor, borderColor;
+    /** Size of a dock tile in the last draw; the bar's padding and radius follow it. */
+    private int tileW, tileH;
 
     /**
      * @param glassEnabled translucent band so wallpaper/glow show through; when false the band is opaque
@@ -117,6 +124,8 @@ public class DockDecoration extends RecyclerView.ItemDecoration {
             float r = l + card.getWidth();
             float b = t + card.getHeight();
             if (!any) {
+                tileW = card.getWidth();
+                tileH = card.getHeight();
                 rect.set(l, t, r, b);
                 any = true;
             } else {
@@ -136,15 +145,25 @@ public class DockDecoration extends RecyclerView.ItemDecoration {
     }
 
     private void drawGlass(Canvas c, RecyclerView parent) {
-        if (barRadius == 0f) {
-            barRadius = parent.getResources().getDimension(R.dimen.apple_bar_radius);
+        if (focusLift < 0f) {
+            focusLift = parent.getResources().getDimension(R.dimen.apple_focus_lift);
             glassColor = parent.getContext().getColor(R.color.apple_glass);
             borderColor = parent.getContext().getColor(R.color.apple_glass_border);
             band.setColor(glassColor);
         }
-        // Room around the tiles for their focus zoom and rise, so a focused tile never touches the rim.
-        rect.inset(-14 * density, -BAR_PAD_DP * density);
-        float radius = barRadius;
+        float grow = (AppleFocus.SCALE - 1f) / 2f;
+        // The bar is drawn on the grid's canvas, so it cannot reach past the grid's sides: the gap shrinks to fit.
+        float side = Math.min(rect.left, parent.getWidth() - rect.right) - grow * tileW;
+        float gap = Math.max(MIN_GAP_DP * density, Math.min(FOCUS_GAP_DP * density, side));
+        // Room for the focus zoom and rise, leaving the same gap on every side of a focused tile. The bar stays
+        // centred on the row, so below a focused (risen) tile the gap is larger by twice the rise.
+        rect.inset(-(gap + grow * tileW), -(gap + grow * tileH + focusLift));
+        // Concentric corners: each rim radius is the focused tile's radius plus the gap on that side.
+        float tileRadius = AppAdapter.cornerRadius(tileW, density) * AppleFocus.SCALE;
+        float top = tileRadius + gap, bottom = top + 2f * focusLift;
+        setRadii(radii, top, bottom);
+        barPath.rewind();
+        barPath.addRoundRect(rect, radii, Path.Direction.CW);
         if (hasFrost) {
             // The bar is fixed to the screen like the wallpaper behind it: map the frost through the grid's
             // position on screen, so it lines up with the picture and moves against the grid when it scrolls.
@@ -152,10 +171,10 @@ public class DockDecoration extends RecyclerView.ItemDecoration {
             frostMatrix.set(frostToRoot);
             frostMatrix.postTranslate(-location[0], -location[1]);
             frostPaint.getShader().setLocalMatrix(frostMatrix);
-            c.drawRoundRect(rect, radius, radius, frostPaint);
-            if (dimPaint.getAlpha() > 0) c.drawRoundRect(rect, radius, radius, dimPaint);
+            c.drawPath(barPath, frostPaint);
+            if (dimPaint.getAlpha() > 0) c.drawPath(barPath, dimPaint);
         } else {
-            c.drawRoundRect(rect, radius, radius, band);
+            c.drawPath(barPath, band);
         }
         if (rect.height() != shadedHeight) {
             shadedHeight = rect.height();
@@ -170,10 +189,18 @@ public class DockDecoration extends RecyclerView.ItemDecoration {
         shadeMatrix.setTranslate(0, rect.top);
         tintPaint.getShader().setLocalMatrix(shadeMatrix);
         rimPaint.getShader().setLocalMatrix(shadeMatrix);
-        c.drawRoundRect(rect, radius, radius, tintPaint);
+        c.drawPath(barPath, tintPaint);
         float half = rimPaint.getStrokeWidth() / 2f;
         rect.inset(half, half);
-        c.drawRoundRect(rect, radius - half, radius - half, rimPaint);
+        setRadii(radii, top - half, bottom - half);
+        barPath.rewind();
+        barPath.addRoundRect(rect, radii, Path.Direction.CW);
+        c.drawPath(barPath, rimPaint);
+    }
+
+    private static void setRadii(float[] r, float top, float bottom) {
+        for (int i = 0; i < 4; i++) r[i] = top;
+        for (int i = 4; i < 8; i++) r[i] = bottom;
     }
 
     private static int blend(int a, int b, float t) {
