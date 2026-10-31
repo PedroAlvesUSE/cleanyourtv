@@ -226,6 +226,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private boolean autoAccent;
     /** top_shelf (with apple_style): the focused dock app shown large above the dock; null when off. */
     private TopShelf shelf;
+    /** continue_watching: the Continue watching row under the dock; null when off. */
+    private ContinueRow continueRow;
     /** Sharper banners for the Top Shelf, loaded the first time each dock app is focused. */
     private final Map<String, Drawable> shelfBanners = new HashMap<>();
     private DockDecoration dockDecoration;
@@ -454,6 +456,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         fillDockLeavesSlots = !cfg.fillDock;
         adapter.setSavedOrder(Order.ranks(Order.load(Order.file(this)), dockApps));
         grid.setAdapter(adapter);
+        // Continue watching: off in guest mode, and the plain grid (dock_row false) has no dock to sit under.
+        if (cfg.feature(ContinueStore.FEATURE) && !cfg.guestMode() && dockRow) {
+            continueRow = new ContinueRow(this, continueHost, grid, COLUMNS, cfg,
+                    apple && cfg.feature(Apple.PARALLAX), reducedMotion);
+        }
 
         // tvOS layout: push the dock row towards the bottom of the screen, leaving room for
         // rows_below_dock grid rows under it; the rest of the grid stays below until you press Down.
@@ -648,6 +655,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             return;
         }
         promptsPaused = false;
+        if (continueRow != null) continueRow.start();
         if (rebuildOnResume) {
             tilesReady = false;
             reloadApps(true);
@@ -780,6 +788,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         handler.removeCallbacks(minuteTick);
         stopStats();
         if (diya != null) diya.stop();
+        if (continueRow != null) continueRow.stop();
         cancelPendingFocusScroll();
         // Nothing of ours stays on screen over another app; an undecided prompt simply returns next time.
         if (cardPrompt != null) cardPrompt.dismiss();
@@ -807,6 +816,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     protected void onDestroy() {
         super.onDestroy();
         wallpaperPlayer.close();
+        if (continueRow != null) continueRow.destroy();
         ConnectivityManager cm = getSystemService(ConnectivityManager.class);
         TvInputManager tim = (TvInputManager) getSystemService(TV_INPUT_SERVICE);
         if (tim != null) tim.unregisterCallback(inputCallback);
@@ -1898,8 +1908,16 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         }
         if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
             if (position < COLUMNS) return false;          // dock row: let focus move to the top bar
+            if (position < 2 * COLUMNS && continueRow != null && continueRow.focusColumn(position % COLUMNS)) {
+                grid.playSoundEffect(SoundEffectConstants.NAVIGATION_UP);
+                return true;
+            }
             target = position - COLUMNS;
         } else {
+            if (position < COLUMNS && continueRow != null && continueRow.focusColumn(position)) {
+                grid.playSoundEffect(SoundEffectConstants.NAVIGATION_DOWN);
+                return true;
+            }
             int lastRowStart = ((count - 1) / COLUMNS) * COLUMNS;
             if (position >= lastRowStart) {
                 if (adapter.isLibraryAt(count)) focusLibrary();
@@ -1913,6 +1931,30 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 ? SoundEffectConstants.NAVIGATION_UP : SoundEffectConstants.NAVIGATION_DOWN);
         return true;
     }
+
+    /** Focus between the Continue watching row, the dock above it and the grid below it. */
+    private final ContinueRow.Host continueHost = new ContinueRow.Host() {
+        @Override
+        public void onRowUp(int column) {
+            grid.playSoundEffect(SoundEffectConstants.NAVIGATION_UP);
+            focusTile(Math.min(column, Math.max(0, adapter.dockFilled() - 1)));
+        }
+
+        @Override
+        public boolean onRowDown(int column) {
+            if (adapter.appCount() <= COLUMNS) return false;
+            grid.playSoundEffect(SoundEffectConstants.NAVIGATION_DOWN);
+            focusTile(Math.min(COLUMNS + column, adapter.appCount() - 1));
+            return true;
+        }
+
+        @Override
+        public void onRowFocused() {
+            libraryFocusPending = false;
+            hideGlass();
+            hideHero();
+        }
+    };
 
     @Override public void onLibraryFocused() {
         libraryFocusPending = false;

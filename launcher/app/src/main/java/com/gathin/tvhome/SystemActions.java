@@ -28,13 +28,16 @@ final class SystemActions {
     static final String PARENTAL_PIN = "parental_pin_set";
     static final String PARENTAL_APPS = "parental_apps_pick";
     static final String PARENTAL_LIMIT = "parental_limit_pick";
+    static final String CONTINUE_APPS = "continue_apps_pick";
+    static final String CONTINUE_ACCESS = "continue_access";
     static final int REQUEST_BACKUP = 71;
 
     private SystemActions() { }
 
     static boolean handles(String key) {
         return TV_INFO.equals(key) || CLEAN_NOW.equals(key) || BACKUP_OPEN.equals(key) || REMOTE_INFO.equals(key)
-                || PARENTAL_PIN.equals(key) || PARENTAL_APPS.equals(key) || PARENTAL_LIMIT.equals(key);
+                || PARENTAL_PIN.equals(key) || PARENTAL_APPS.equals(key) || PARENTAL_LIMIT.equals(key)
+                || CONTINUE_APPS.equals(key) || CONTINUE_ACCESS.equals(key);
     }
 
     /** O texto cinza no fim da linha. */
@@ -42,6 +45,13 @@ final class SystemActions {
         if (PARENTAL_PIN.equals(key)) return Parental.hasPin(ctx) ? "••••" : "";
         if (PARENTAL_APPS.equals(key)) return String.valueOf(Parental.apps(ctx).size());
         if (PARENTAL_LIMIT.equals(key)) return limitLabel(ctx, Parental.limit(ctx));
+        if (CONTINUE_ACCESS.equals(key)) {
+            return ctx.getString(ContinueListener.granted(ctx) ? R.string.cw_granted : R.string.cw_not_granted);
+        }
+        if (CONTINUE_APPS.equals(key)) {
+            int waiting = ContinueApps.waiting(ctx);
+            return waiting > 0 ? ctx.getString(R.string.cw_waiting, waiting) : "";
+        }
         return "";
     }
 
@@ -63,6 +73,8 @@ final class SystemActions {
     static void toggled(Activity a, String key, boolean on, Runnable refresh) {
         if (Parental.FEATURE.equals(key) && on && !Parental.hasPin(a)) {
             run(a, PARENTAL_PIN, refresh);
+        } else if (ContinueStore.FEATURE.equals(key) || ContinueStore.FEATURE_MEDIA.equals(key)) {
+            ContinueListener.refresh(a);
         } else if (RemoteServer.FEATURE.equals(key) && on) {
             // O HomeKeyService liga o servidor ao ver a mudança; o diálogo espera por ele.
             new Handler(Looper.getMainLooper()).postDelayed(() -> {
@@ -73,6 +85,7 @@ final class SystemActions {
 
     static void run(Activity a, String key, Runnable refresh) {
         String needs = TV_INFO.equals(key) ? "tv_panel" : CLEAN_NOW.equals(key) ? "quick_clean"
+                : CONTINUE_APPS.equals(key) ? ContinueStore.FEATURE : CONTINUE_ACCESS.equals(key) ? ContinueStore.FEATURE_MEDIA
                 : BACKUP_OPEN.equals(key) ? "config_backup" : REMOTE_INFO.equals(key) ? RemoteServer.FEATURE : null;
         if (needs != null && !Config.feature(a, needs)) {
             Toast.makeText(a, R.string.turn_on_first, Toast.LENGTH_LONG).show();
@@ -90,6 +103,11 @@ final class SystemActions {
             a.startActivityForResult(new Intent(a, BackupActivity.class), REQUEST_BACKUP);
         } else if (REMOTE_INFO.equals(key)) {
             remoteInfo(a);
+        } else if (CONTINUE_ACCESS.equals(key)) {
+            new AlertDialog.Builder(a).setTitle(R.string.set_cw_access).setMessage(R.string.cw_access_help)
+                    .setPositiveButton(android.R.string.ok, (d, w) -> refresh.run()).show();
+        } else if (CONTINUE_APPS.equals(key)) {
+            continueApps(a, refresh);
         } else if (Parental.hasPin(a)) {
             askPin(a, R.string.parental_enter, pin -> {
                 if (Parental.verify(a, pin)) parental(a, key, refresh);
@@ -154,6 +172,36 @@ final class SystemActions {
                 })
                 .setPositiveButton(android.R.string.ok, (d, w) -> {
                     Parental.setApps(a, result);
+                    refresh.run();
+                })
+                .setNegativeButton(android.R.string.cancel, null).show();
+    }
+
+    /** Continue watching: check the apps that may add cards; the decision is pinned to each app's signer. */
+    private static void continueApps(Activity a, Runnable refresh) {
+        PackageManager pm = a.getPackageManager();
+        List<String> pkgs = new ArrayList<>(ContinueApps.all(a).keySet());
+        if (pkgs.isEmpty()) {
+            new AlertDialog.Builder(a).setTitle(R.string.set_cw_apps).setMessage(R.string.set_cw_apps_none)
+                    .setPositiveButton(android.R.string.ok, null).show();
+            return;
+        }
+        java.util.Map<String, String> state = ContinueApps.all(a);
+        String[] names = new String[pkgs.size()];
+        boolean[] on = new boolean[pkgs.size()];
+        for (int i = 0; i < names.length; i++) {
+            String p = pkgs.get(i);
+            try {
+                names[i] = pm.getApplicationLabel(pm.getApplicationInfo(p, 0)) + "  \u00B7  " + p;
+            } catch (PackageManager.NameNotFoundException e) {
+                names[i] = p;
+            }
+            on[i] = ContinueApps.SHOW.equals(state.get(p));
+        }
+        new AlertDialog.Builder(a).setTitle(R.string.set_cw_apps)
+                .setMultiChoiceItems(names, on, (d, which, checked) -> on[which] = checked)
+                .setPositiveButton(android.R.string.ok, (d, w) -> {
+                    for (int i = 0; i < on.length; i++) ContinueApps.decide(a, pkgs.get(i), on[i]);
                     refresh.run();
                 })
                 .setNegativeButton(android.R.string.cancel, null).show();

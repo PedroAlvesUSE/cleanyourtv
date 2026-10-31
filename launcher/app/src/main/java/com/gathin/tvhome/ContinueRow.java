@@ -1,0 +1,672 @@
+package com.gathin.tvhome;
+
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.PendingIntent;
+import android.content.Context;
+import android.content.Intent;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
+import android.database.ContentObserver;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.ColorFilter;
+import android.graphics.Outline;
+import android.graphics.Paint;
+import android.graphics.PixelFormat;
+import android.graphics.Rect;
+import android.graphics.RectF;
+import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
+import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
+import android.text.TextUtils;
+import android.util.TypedValue;
+import android.view.Gravity;
+import android.view.KeyEvent;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.ViewOutlineProvider;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+/**
+ * The Continue watching row on Home (continue_watching): 16:9 cards in the dock's columns, just under the dock.
+ * The grid keeps a gap under the dock row (an item decoration) and this row is drawn over that gap, following the
+ * grid as it scrolls. The row is gone when the list is empty. OK opens the item's deep link inside its own app
+ * (or the app); holding OK offers "Remove from list". Built only when the switch is on.
+ */
+final class ContinueRow {
+
+    interface Host {
+        /** Up from the card in this dock column. */
+        void onRowUp(int column);
+
+        /** Down from the card in this column; false when there is nothing below. */
+        boolean onRowDown(int column);
+
+        /** A card took focus. */
+        void onRowFocused();
+    }
+
+    private final Activity activity;
+    private final Host host;
+    private final FrameLayout parent;
+    private final RecyclerView grid;
+    private final int columns;
+    private final float density;
+    private final boolean animations, parallax, reduced;
+    private final Set<String> hidden;
+    private final boolean media;
+    private final Handler main = new Handler(Looper.getMainLooper());
+    private final ExecutorService work = Executors.newSingleThreadExecutor();
+    private final Map<String, Drawable> icons = new HashMap<>();
+    private final Map<String, String> labels = new HashMap<>();
+    private final List<ContinueStore.Item> items = new ArrayList<>();
+
+    private final LinearLayout view;
+    private final TextView header;
+    private final RecyclerView list;
+    private final RowAdapter adapter = new RowAdapter();
+    private final Gap gap = new Gap();
+    private int gapPx;
+    private int tileW, tileH, cellW;
+    private boolean started;
+    private final Runnable reload = this::reload;
+    private final ContentObserver observer;
+
+    ContinueRow(Activity activity, Host host, RecyclerView grid, int columns, Config cfg, boolean parallax,
+                boolean reduced) {
+        this.activity = activity;
+        this.host = host;
+        this.grid = grid;
+        this.parent = (FrameLayout) grid.getParent();
+        this.columns = columns;
+        this.density = activity.getResources().getDisplayMetrics().density;
+        this.animations = cfg.animations;
+        this.parallax = parallax;
+        this.reduced = reduced;
+        this.hidden = new java.util.HashSet<>(cfg.hiddenApps);
+        this.media = cfg.feature(ContinueStore.FEATURE_MEDIA);
+
+        view = new LinearLayout(activity);
+        view.setOrientation(LinearLayout.VERTICAL);
+        view.setClipChildren(false);
+        view.setClipToPadding(false);
+        view.setVisibility(View.GONE);
+        header = new TextView(activity);
+        header.setText(R.string.cw_title);
+        header.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        header.setSingleLine(true);
+        Apple.style(header, Apple.MEDIUM, Apple.TEXT_2, density);
+        view.addView(header, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+        list = new RecyclerView(activity);
+        list.setLayoutManager(new LinearLayoutManager(activity, LinearLayoutManager.HORIZONTAL, false));
+        list.setClipChildren(false);
+        list.setClipToPadding(false);
+        list.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        list.setItemAnimator(null);
+        list.setHasFixedSize(true);
+        list.setAdapter(adapter);
+        view.addView(list, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+        parent.addView(view, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP));
+
+        grid.addItemDecoration(gap);
+        grid.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrolled(@NonNull RecyclerView rv, int dx, int dy) {
+                place();
+            }
+        });
+        grid.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> grid.post(this::measure));
+        observer = new ContentObserver(main) {
+            @Override
+            public void onChange(boolean selfChange) {
+                main.removeCallbacks(reload);
+                main.postDelayed(reload, 300);
+            }
+        };
+    }
+
+    void start() {
+        if (started) return;
+        started = true;
+        activity.getContentResolver().registerContentObserver(ContinueProvider.ITEMS, false, observer);
+        reload();
+    }
+
+    void stop() {
+        if (!started) return;
+        started = false;
+        main.removeCallbacks(reload);
+        activity.getContentResolver().unregisterContentObserver(observer);
+    }
+
+    void destroy() {
+        stop();
+        work.shutdown();
+    }
+
+    boolean shown() {
+        return !items.isEmpty() && view.getVisibility() == View.VISIBLE;
+    }
+
+    // ---- data ------------------------------------------------------------------------------------
+
+    private void reload() {
+        Context app = activity.getApplicationContext();
+        work.execute(() -> {
+            PackageManager pm = app.getPackageManager();
+            Map<String, Boolean> allowed = new HashMap<>();
+            List<ContinueStore.Item> all = ContinueProvider.load(app);
+            List<ContinueStore.Item> out = ContinueStore.visible(all, it -> {
+                if (hidden.contains(it.pkg)) return false;
+                Boolean ok = allowed.get(it.pkg + it.source);
+                if (ok == null) {
+                    ok = installed(pm, it.pkg) && (ContinueStore.SOURCE_MEDIA.equals(it.source) ? media
+                            : ContinueApps.shown(app, it.pkg));
+                    allowed.put(it.pkg + it.source, ok);
+                }
+                return ok;
+            }, System.currentTimeMillis());
+            Map<String, Drawable> newIcons = new HashMap<>();
+            Map<String, String> newLabels = new HashMap<>();
+            for (ContinueStore.Item it : out) {
+                if (newIcons.containsKey(it.pkg) || icons.containsKey(it.pkg)) continue;
+                try {
+                    ApplicationInfo ai = pm.getApplicationInfo(it.pkg, 0);
+                    newIcons.put(it.pkg, ai.loadIcon(pm));
+                    newLabels.put(it.pkg, ai.loadLabel(pm).toString());
+                } catch (Exception ignored) {
+                    newIcons.put(it.pkg, null);
+                    newLabels.put(it.pkg, it.pkg);
+                }
+            }
+            main.post(() -> {
+                if (activity.isDestroyed()) return;
+                icons.putAll(newIcons);
+                labels.putAll(newLabels);
+                apply(out);
+            });
+        });
+    }
+
+    private static boolean installed(PackageManager pm, String pkg) {
+        try {
+            pm.getApplicationInfo(pkg, 0);
+            return true;
+        } catch (PackageManager.NameNotFoundException e) {
+            return false;
+        }
+    }
+
+    @android.annotation.SuppressLint("NotifyDataSetChanged")
+    private void apply(List<ContinueStore.Item> fresh) {
+        View focused = list.getFocusedChild();
+        int focusIndex = focused == null ? -1 : list.getChildAdapterPosition(focused);
+        items.clear();
+        items.addAll(fresh);
+        adapter.notifyDataSetChanged();
+        if (items.isEmpty()) {
+            boolean hadFocus = focused != null;
+            view.setVisibility(View.GONE);
+            setGap(0);
+            if (hadFocus) host.onRowUp(0);
+            return;
+        }
+        view.setVisibility(View.VISIBLE);
+        measure();
+        if (focusIndex >= 0) {
+            int target = Math.min(focusIndex, items.size() - 1);
+            list.post(() -> focusIndex(target));
+        }
+    }
+
+    // ---- layout ----------------------------------------------------------------------------------
+
+    /** Sizes the cards to the dock's tiles and columns, then reserves the gap under the dock. */
+    private void measure() {
+        if (items.isEmpty() || grid.getWidth() == 0) return;
+        int inner = grid.getWidth() - grid.getPaddingLeft() - grid.getPaddingRight();
+        int cell = inner / columns;
+        int w = 0;
+        View dock = dockChild();
+        if (dock != null) {
+            View card = dock.findViewById(R.id.card);
+            if (card != null) w = card.getWidth();
+        }
+        if (w <= 0) w = AppAdapter.tileWidthPx(inner, columns, density);
+        if (w != tileW || cell != cellW) {
+            tileW = w;
+            tileH = Math.round(w * 9f / 16f);
+            cellW = cell;
+            list.setPadding(grid.getPaddingLeft(), 0, grid.getPaddingRight(), 0);
+            header.setPadding(grid.getPaddingLeft() + (cell - w) / 2, 0, 0, 0);
+            list.setAdapter(adapter);   // new holders at the new size
+        }
+        int height = Math.round(HEADER_DP * density) + itemHeight();
+        setGap(height);
+        place();
+    }
+
+    private static final float HEADER_DP = 24, TOP_DP = 10, PAD_DP = 10, TEXT_GAP_DP = 12, TITLE_DP = 40,
+            APP_DP = 22, BOTTOM_DP = 14;
+
+    private int itemHeight() {
+        return tileH + Math.round((PAD_DP + TEXT_GAP_DP + TITLE_DP + APP_DP + BOTTOM_DP) * density);
+    }
+
+    private void setGap(int px) {
+        int want = px == 0 ? 0 : px + Math.round(TOP_DP * density);
+        if (want == gapPx) return;
+        gapPx = want;
+        grid.invalidateItemDecorations();
+    }
+
+    private View dockChild() {
+        for (int i = 0; i < grid.getChildCount(); i++) {
+            View c = grid.getChildAt(i);
+            int pos = grid.getChildAdapterPosition(c);
+            if (pos >= 0 && pos < columns) return c;
+        }
+        return null;
+    }
+
+    /** Puts the row on the gap under the dock row, wherever the grid has scrolled it. */
+    private void place() {
+        if (items.isEmpty() || gapPx == 0) return;
+        View dock = dockChild();
+        if (dock == null) {
+            view.setTranslationY(-10000f);
+            return;
+        }
+        RecyclerView.LayoutManager lm = grid.getLayoutManager();
+        int bottom = lm == null ? dock.getBottom() : lm.getDecoratedBottom(dock);
+        view.setTranslationY(grid.getTop() + bottom - gapPx + TOP_DP * density);
+    }
+
+    /** Scrolls the grid so the whole row is on screen. */
+    private void reveal() {
+        float top = view.getTranslationY();
+        float bottom = top + view.getHeight();
+        int limit = parent.getHeight() - Math.round(8 * density);
+        int dy = 0;
+        if (bottom > limit) dy = Math.round(bottom - limit);
+        else if (top < 0) dy = Math.round(top);
+        if (dy == 0) return;
+        if (Apple.motion(animations) && !reduced) grid.smoothScrollBy(0, dy);
+        else grid.scrollBy(0, dy);
+    }
+
+    final class Gap extends RecyclerView.ItemDecoration {
+        @Override
+        public void getItemOffsets(@NonNull Rect outRect, @NonNull View child, @NonNull RecyclerView parent,
+                                   @NonNull RecyclerView.State state) {
+            int pos = parent.getChildAdapterPosition(child);
+            if (gapPx > 0 && pos >= 0 && pos < columns) outRect.bottom += gapPx;
+        }
+    }
+
+    // ---- focus -----------------------------------------------------------------------------------
+
+    private int firstVisible() {
+        LinearLayoutManager lm = (LinearLayoutManager) list.getLayoutManager();
+        int first = lm == null ? 0 : lm.findFirstCompletelyVisibleItemPosition();
+        return Math.max(0, first);
+    }
+
+    /** Down from the dock tile in this column: the card under it. */
+    boolean focusColumn(int column) {
+        if (!shown()) return false;
+        return focusIndex(Math.min(items.size() - 1, firstVisible() + Math.max(0, column)));
+    }
+
+    private boolean focusIndex(int index) {
+        RecyclerView.ViewHolder vh = list.findViewHolderForAdapterPosition(index);
+        if (vh != null) return ((Holder) vh).card.requestFocus();
+        list.scrollToPosition(index);
+        list.post(() -> {
+            RecyclerView.ViewHolder h = list.findViewHolderForAdapterPosition(index);
+            if (h != null) ((Holder) h).card.requestFocus();
+        });
+        return true;
+    }
+
+    private int columnOf(int index) {
+        return Math.max(0, Math.min(columns - 1, index - firstVisible()));
+    }
+
+    // ---- actions ---------------------------------------------------------------------------------
+
+    private void open(ContinueStore.Item it) {
+        if (it.deepLink != null) {
+            Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(it.deepLink)).setPackage(it.pkg)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            try {
+                activity.startActivity(i);
+                return;
+            } catch (Exception ignored) {
+                // No activity of that app takes the link: open the app instead.
+            }
+        }
+        PendingIntent session = ContinueStore.SOURCE_MEDIA.equals(it.source) ? ContinueListener.sessionActivity(it.pkg) : null;
+        if (session != null) {
+            try {
+                session.send();
+                return;
+            } catch (Exception ignored) {
+                // The session went away.
+            }
+        }
+        PackageManager pm = activity.getPackageManager();
+        Intent launch = pm.getLeanbackLaunchIntentForPackage(it.pkg);
+        if (launch == null) launch = pm.getLaunchIntentForPackage(it.pkg);
+        try {
+            if (launch == null) throw new IllegalStateException();
+            activity.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                    | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED));
+        } catch (Exception e) {
+            Toast.makeText(activity, activity.getString(R.string.cant_open, it.title), Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void menu(ContinueStore.Item it) {
+        new AlertDialog.Builder(activity).setTitle(it.title)
+                .setItems(new CharSequence[]{activity.getString(R.string.cw_remove)}, (d, which) -> {
+                    Context app = activity.getApplicationContext();
+                    work.execute(() -> ContinueProvider.remove(app, it.pkg, it.id));
+                }).show();
+    }
+
+    // ---- cards -----------------------------------------------------------------------------------
+
+    final class Holder extends RecyclerView.ViewHolder {
+        final FrameLayout card;
+        final ImageView image, placeholderIcon;
+        final View scrim, bar;
+        final ProgressBarDrawable progress = new ProgressBarDrawable();
+        final TextView title, app;
+        final ImageView appIcon;
+        final AppleFocus focus;
+        String imageKey;
+
+        Holder(FrameLayout item, FrameLayout card, ImageView image, ImageView placeholderIcon, View scrim, View bar,
+               TextView title, ImageView appIcon, TextView app, AppleFocus focus) {
+            super(item);
+            this.card = card;
+            this.image = image;
+            this.placeholderIcon = placeholderIcon;
+            this.scrim = scrim;
+            this.bar = bar;
+            this.title = title;
+            this.appIcon = appIcon;
+            this.app = app;
+            this.focus = focus;
+            bar.setBackground(progress);
+        }
+    }
+
+    final class RowAdapter extends RecyclerView.Adapter<Holder> {
+        @Override
+        public int getItemCount() {
+            return tileW == 0 ? 0 : items.size();
+        }
+
+        @NonNull
+        @Override
+        public Holder onCreateViewHolder(@NonNull ViewGroup group, int viewType) {
+            return create();
+        }
+
+        @Override
+        public void onBindViewHolder(@NonNull Holder h, int position) {
+            bind(h, items.get(position));
+        }
+    }
+
+    private int dp(float v) {
+        return Math.round(v * density);
+    }
+
+    private Holder create() {
+        Context ctx = activity;
+        int w = tileW, h = tileH;
+        FrameLayout item = new FrameLayout(ctx);
+        item.setClipChildren(false);
+        item.setClipToPadding(false);
+        item.setPadding(0, dp(PAD_DP), 0, 0);
+        item.setLayoutParams(new RecyclerView.LayoutParams(cellW, itemHeight()));
+
+        int pad = dp(SoftShadow.PAD_DP);
+        float radius = AppAdapter.cornerRadius(w, density);
+        View shadow = new View(ctx);
+        shadow.setBackground(SoftShadow.drawable(ctx.getResources(), w, h, radius));
+        shadow.setAlpha(0f);
+        shadow.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        FrameLayout.LayoutParams slp = new FrameLayout.LayoutParams(w + 2 * pad, h + 2 * pad,
+                Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+        slp.topMargin = -pad;
+        slp.bottomMargin = -pad;
+        item.addView(shadow, slp);
+
+        FrameLayout card = new FrameLayout(ctx);
+        card.setFocusable(true);
+        card.setClickable(true);
+        card.setLongClickable(true);
+        GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                new int[]{0xFF2C2C30, 0xFF1C1C1F});
+        card.setBackground(bg);
+        card.setOutlineProvider(new ViewOutlineProvider() {
+            @Override
+            public void getOutline(View v, Outline outline) {
+                outline.setRoundRect(0, 0, v.getWidth(), v.getHeight(), radius);
+            }
+        });
+        card.setClipToOutline(true);
+        item.addView(card, new FrameLayout.LayoutParams(w, h, Gravity.TOP | Gravity.CENTER_HORIZONTAL));
+
+        ImageView placeholderIcon = new ImageView(ctx);
+        placeholderIcon.setAlpha(0.35f);
+        card.addView(placeholderIcon, new FrameLayout.LayoutParams(dp(36), dp(36), Gravity.CENTER));
+        ImageView image = new ImageView(ctx);
+        image.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        card.addView(image, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+        View scrim = new View(ctx);
+        scrim.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{0x00000000, 0x8C000000}));
+        card.addView(scrim, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Math.round(h * 0.42f),
+                Gravity.BOTTOM));
+        View bar = new View(ctx);
+        FrameLayout.LayoutParams blp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(4),
+                Gravity.BOTTOM);
+        blp.leftMargin = dp(12);
+        blp.rightMargin = dp(12);
+        blp.bottomMargin = dp(10);
+        card.addView(bar, blp);
+        GlareView glare = new GlareView(ctx);
+        glare.setAlpha(0f);
+        card.addView(glare, new FrameLayout.LayoutParams(2 * w, 2 * h, Gravity.CENTER));
+        glare.setTileSize(w, h);
+
+        int textLeft = (cellW - w) / 2;
+        TextView title = new TextView(ctx);
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        title.setMaxLines(2);
+        title.setEllipsize(TextUtils.TruncateAt.END);
+        title.setLineSpacing(0f, 1.05f);
+        Apple.style(title, Apple.MEDIUM, Apple.TEXT, density);
+        FrameLayout.LayoutParams tlp = new FrameLayout.LayoutParams(w, ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.TOP | Gravity.START);
+        tlp.leftMargin = textLeft;
+        tlp.topMargin = h + dp(TEXT_GAP_DP);
+        item.addView(title, tlp);
+
+        LinearLayout appRow = new LinearLayout(ctx);
+        appRow.setOrientation(LinearLayout.HORIZONTAL);
+        appRow.setGravity(Gravity.CENTER_VERTICAL);
+        ImageView appIcon = new ImageView(ctx);
+        appRow.addView(appIcon, new LinearLayout.LayoutParams(dp(16), dp(16)));
+        TextView app = new TextView(ctx);
+        app.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        app.setSingleLine(true);
+        app.setEllipsize(TextUtils.TruncateAt.END);
+        Apple.style(app, Apple.REGULAR, Apple.TEXT_2, density);
+        LinearLayout.LayoutParams alp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        alp.leftMargin = dp(6);
+        appRow.addView(app, alp);
+        FrameLayout.LayoutParams rlp = new FrameLayout.LayoutParams(w, dp(APP_DP), Gravity.BOTTOM | Gravity.START);
+        rlp.leftMargin = textLeft;
+        rlp.bottomMargin = dp(BOTTOM_DP);
+        item.addView(appRow, rlp);
+
+        AppleFocus focus = new AppleFocus(item, card, shadow, glare, animations, parallax, reduced);
+        focus.setTileSize(w, h);
+        Holder holder = new Holder(item, card, image, placeholderIcon, scrim, bar, title, appIcon, app, focus);
+        title.setAlpha(0.8f);
+        card.setOnFocusChangeListener((v, has) -> {
+            focus.onFocusChanged(has);
+            float a = has ? 1f : 0.8f;
+            if (Apple.motion(animations)) title.animate().alpha(a).setDuration(150).start();
+            else title.setAlpha(a);
+            if (has) {
+                host.onRowFocused();
+                reveal();
+            }
+        });
+        card.setOnClickListener(v -> {
+            int pos = holder.getBindingAdapterPosition();
+            if (pos != RecyclerView.NO_POSITION) open(items.get(pos));
+        });
+        card.setOnLongClickListener(v -> {
+            int pos = holder.getBindingAdapterPosition();
+            if (pos != RecyclerView.NO_POSITION) menu(items.get(pos));
+            return true;
+        });
+        card.setOnKeyListener((v, keyCode, event) -> {
+            if (event.getAction() != KeyEvent.ACTION_DOWN) return false;
+            int pos = holder.getBindingAdapterPosition();
+            if (pos == RecyclerView.NO_POSITION) return false;
+            switch (keyCode) {
+                case KeyEvent.KEYCODE_DPAD_UP:
+                    focus.onKey(keyCode);
+                    host.onRowUp(columnOf(pos));
+                    return true;
+                case KeyEvent.KEYCODE_DPAD_DOWN:
+                    focus.onKey(keyCode);
+                    host.onRowDown(columnOf(pos));
+                    return true;
+                case KeyEvent.KEYCODE_DPAD_LEFT:
+                case KeyEvent.KEYCODE_DPAD_RIGHT:
+                    focus.onKey(keyCode);
+                    boolean left = keyCode == KeyEvent.KEYCODE_DPAD_LEFT;
+                    // The row's ends hold focus: it never wraps or leaves the row sideways.
+                    if (left && pos == 0 || !left && pos == items.size() - 1) return true;
+                    focusIndex(pos + (left ? -1 : 1));
+                    return true;
+                default:
+                    return false;
+            }
+        });
+        return holder;
+    }
+
+    private void bind(Holder h, ContinueStore.Item it) {
+        h.title.setText(it.title);
+        String label = labels.get(it.pkg);
+        h.app.setText(it.subtitle != null ? it.subtitle : label);
+        Drawable icon = icons.get(it.pkg);
+        h.appIcon.setImageDrawable(icon);
+        h.placeholderIcon.setImageDrawable(icon);
+        h.card.setContentDescription(it.title + (label == null ? "" : ", " + label));
+        boolean hasProgress = it.progress > 0.005f;
+        h.bar.setVisibility(hasProgress ? View.VISIBLE : View.GONE);
+        h.scrim.setVisibility(hasProgress ? View.VISIBLE : View.GONE);
+        h.progress.setProgress(it.progress);
+        h.focus.snap(h.card.isFocused());
+        String key = ContinueImages.keyOf(it);
+        h.imageKey = key;
+        Bitmap cached = ContinueImages.cached(key);
+        if (cached != null) {
+            h.image.setImageBitmap(cached);
+            h.image.setAlpha(1f);
+            h.placeholderIcon.setVisibility(View.INVISIBLE);
+            return;
+        }
+        h.image.setImageDrawable(null);
+        h.image.setAlpha(0f);
+        h.placeholderIcon.setVisibility(View.VISIBLE);
+        if (key == null) return;
+        ContinueImages.load(activity, key, tileW, b -> {
+            if (b == null || !key.equals(h.imageKey)) return;
+            h.image.setImageBitmap(b);
+            h.placeholderIcon.setVisibility(View.INVISIBLE);
+            if (Apple.motion(animations) && !reduced) h.image.animate().alpha(1f).setDuration(220).start();
+            else h.image.setAlpha(1f);
+        });
+    }
+
+    /** The thin progress line: #F5F5F7 over #33FFFFFF, fully rounded. */
+    static final class ProgressBarDrawable extends Drawable {
+        private final Paint track = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final RectF r = new RectF();
+        private float progress;
+
+        ProgressBarDrawable() {
+            track.setColor(0x33FFFFFF);
+            fill.setColor(Apple.TEXT);
+        }
+
+        void setProgress(float p) {
+            progress = Math.max(0f, Math.min(1f, p));
+            invalidateSelf();
+        }
+
+        @Override
+        public void draw(@NonNull Canvas c) {
+            Rect b = getBounds();
+            float radius = b.height() / 2f;
+            r.set(b);
+            c.drawRoundRect(r, radius, radius, track);
+            float end = b.left + Math.max(b.height(), b.width() * progress);
+            r.set(b.left, b.top, end, b.bottom);
+            c.drawRoundRect(r, radius, radius, fill);
+        }
+
+        @Override
+        public void setAlpha(int alpha) {
+            track.setAlpha(alpha * 0x33 / 255);
+            fill.setAlpha(alpha);
+        }
+
+        @Override
+        public void setColorFilter(ColorFilter cf) {
+            fill.setColorFilter(cf);
+        }
+
+        @Override
+        public int getOpacity() {
+            return PixelFormat.TRANSLUCENT;
+        }
+    }
+}
