@@ -189,7 +189,7 @@
     <string name="cw_remove">Remove from list</string>
     <string name="set_later">Watch later</string>
     <string name="set_later_d">A list of what you saved for later.</string>
-    <string name="set_channels">OwnTV channels</string>
+    <string name="set_channels">Favourite channels</string>
     <string name="set_channels_d">Your favourite channels on Home.</string>
     <string name="set_resume">One-click resume</string>
     <string name="set_resume_d">OK on a card plays from where you stopped.</string>
@@ -197,8 +197,8 @@
     <string name="set_remote_d">What the remote\'s buttons do.</string>
     <string name="set_keys">Shortcut buttons</string>
     <string name="set_keys_d">App buttons on the remote open the apps you chose.</string>
-    <string name="set_mic">Microphone opens TizenTube</string>
-    <string name="set_mic_d">The microphone button asks for your voice and searches TizenTube. With the function off, the button goes to the TV\'s assistant.</string>
+    <string name="set_mic">Microphone searches YouTube</string>
+    <string name="set_mic_d">The microphone button asks for your voice and searches YouTube. With the function off, the button goes to the TV\'s assistant.</string>
     <string name="set_quick_menu">Quick menu</string>
     <string name="set_quick_menu_d">Hold Home for volume, inputs, timer, Wi-Fi and screen saver.</string>
     <string name="set_phone">Phone remote</string>
@@ -256,7 +256,7 @@
     <string name="diag_err">error</string>
     <string name="diag_none">No search recorded yet.</string>
     <string name="diag_off">Turn on source diagnostics first.</string>
-    <string name="mic_prompt">Search TizenTube</string>
+    <string name="mic_prompt">Search YouTube</string>
     <string name="mic_unavailable">No voice search on this TV</string>
     <string name="cc_title">Quick controls</string>
     <string name="cc_volume">Volume</string>
@@ -315,6 +315,7 @@
     <string name="set_backup_open">Open backup</string>
     <string name="set_backup_open_d">Shows an address, a PIN and a QR code for your phone.</string>
     <string name="set_recommended">Recommended videos</string>
-    <string name="set_recommended_d">A row of popular YouTube videos above the dock, from Piped and Invidious instances. No key needed.</string>
+    <string name="set_recommended_d">The Recommended shelf from the YouTube account signed in on this TV.</string>
     <string name="rec_title">Recommended</string>
+    <string name="rec_link_hint">On your phone, open %1$s and sign in with the same Google account used on this TV.</string>
 </resources>

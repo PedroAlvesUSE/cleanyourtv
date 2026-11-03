@@ -42,8 +42,8 @@ public class RemoteApiTest {
 
     @Test
     public void packageNamesAreValidated() {
-        assertTrue(RemoteApi.validPackage("io.gh.reisxd.tizentube.cobalt"));
         assertTrue(RemoteApi.validPackage("com.google.android.youtube.tv"));
+        assertTrue(RemoteApi.validPackage("com.netflix.ninja"));
         assertFalse(RemoteApi.validPackage(null));
         assertFalse(RemoteApi.validPackage("noDots"));
         assertFalse(RemoteApi.validPackage("com..x"));

@@ -35,8 +35,8 @@ import java.util.Set;
  * button, so this service also takes KEYCODE_HOME there and sends the user back here whenever the
  * Amazon launcher comes to the front.
  *
- * Funções de sistema que passam por este serviço (cada uma só roda com a sua opção ligada): mic_tizentube
- * (teclas de microfone abrem a busca por voz no TizenTube), quick_menu (Home longo abre o painel rápido),
+ * Funções de sistema que passam por este serviço (cada uma só roda com a sua opção ligada): mic_youtube
+ * (teclas de microfone abrem a busca por voz no YouTube), quick_menu (Home longo abre o painel rápido),
  * parental (tela de PIN sobre o app protegido), phone_remote (servidor na rede local, ações de controle) e
  * sleep_timer (bloqueio da tela ao expirar).
  *
@@ -94,6 +94,39 @@ public class HomeKeyService extends AccessibilityService {
         return instance;
     }
 
+    /**
+     * Religa o serviço quando alguma função depende dele e o Android o tirou da lista
+     * (force-stop, reinstalar). Exige {@code WRITE_SECURE_SETTINGS} concedida por adb.
+     */
+    static void ensureRunning(Context ctx) {
+        if (instance != null || !needed(ctx)) return;
+        // Forma curta (pkg/.Class), a mesma que settings put / build-and-install.sh usam.
+        String svc = ctx.getPackageName() + "/.HomeKeyService";
+        try {
+            String enabled = Settings.Secure.getString(ctx.getContentResolver(),
+                    Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+            if (enabled == null || enabled.isEmpty() || "null".equals(enabled)) {
+                Settings.Secure.putString(ctx.getContentResolver(),
+                        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, svc);
+            } else if (!enabled.contains(svc)) {
+                Settings.Secure.putString(ctx.getContentResolver(),
+                        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, enabled + ":" + svc);
+            }
+            Settings.Secure.putInt(ctx.getContentResolver(), Settings.Secure.ACCESSIBILITY_ENABLED, 1);
+        } catch (SecurityException ignored) {
+            // Sem a permissão concedida por adb, o usuário precisa ligar o serviço à mão.
+        }
+    }
+
+    /** Funções que só rodam com este serviço de acessibilidade ativo. */
+    private static boolean needed(Context ctx) {
+        return Config.feature(ctx, "quick_menu")
+                || Config.feature(ctx, "mic_youtube")
+                || Config.feature(ctx, RemoteServer.FEATURE)
+                || Config.feature(ctx, Parental.FEATURE)
+                || Config.feature(ctx, "sleep_timer");
+    }
+
     @Override
     protected void onServiceConnected() {
         super.onServiceConnected();
@@ -114,7 +147,7 @@ public class HomeKeyService extends AccessibilityService {
     private void refresh() {
         Config config = Config.load(this);
         appKeys = RemoteKeys.parseAppKeys(config.appKeys);
-        micOn = config.feature("mic_tizentube");
+        micOn = config.feature("mic_youtube");
         micKeycodes = micOn ? Config.micKeycodes(this) : MicSearch.DEFAULT_KEYCODES;
         quickMenu = config.feature("quick_menu");
         parentalOn = config.feature(Parental.FEATURE) && Parental.hasPin(this);

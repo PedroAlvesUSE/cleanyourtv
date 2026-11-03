@@ -63,6 +63,12 @@ final class ContinueRow {
 
         /** A card took focus. */
         void onRowFocused();
+
+        /**
+         * Left of the first card or right of the last. True when AboveDock switches section
+         * (Continue ↔ Recommended); false keeps focus on the edge card.
+         */
+        boolean onRowSide(boolean right);
     }
 
     private final Activity activity;
@@ -136,6 +142,16 @@ final class ContinueRow {
         list.setItemAnimator(null);
         list.setHasFixedSize(true);
         list.setAdapter(adapter);
+        if (hosted) {
+            list.addItemDecoration(new RecyclerView.ItemDecoration() {
+                @Override
+                public void getItemOffsets(@NonNull android.graphics.Rect out, @NonNull View view,
+                                           @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
+                    int pos = parent.getChildAdapterPosition(view);
+                    if (pos >= 0 && pos < items.size() - 1) out.right = Math.round(16 * density);
+                }
+            });
+        }
         view.addView(list, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT));
         if (!hosted) {
@@ -251,7 +267,12 @@ final class ContinueRow {
         View focused = list.getFocusedChild();
         int focusIndex = focused == null ? -1 : list.getChildAdapterPosition(focused);
         items.clear();
-        items.addAll(fresh);
+        if (hosted) {
+            int n = Math.min(AboveDock.MAX_CARDS, fresh.size());
+            for (int i = 0; i < n; i++) items.add(fresh.get(i));
+        } else {
+            items.addAll(fresh);
+        }
         adapter.notifyDataSetChanged();
         if (items.isEmpty()) {
             boolean hadFocus = focused != null;
@@ -272,24 +293,39 @@ final class ContinueRow {
 
     // ---- layout ----------------------------------------------------------------------------------
 
-    /** Sizes the cards to the dock's tiles and columns, then reserves the gap under the dock. */
+    /** Dock-sized tiles when the row stands alone; two large posters when AboveDock hosts it. */
     private void measure() {
         if (items.isEmpty() || grid.getWidth() == 0) return;
         int inner = grid.getWidth() - grid.getPaddingLeft() - grid.getPaddingRight();
-        int cell = inner / columns;
-        int w = 0;
-        View dock = dockChild();
-        if (dock != null) {
-            View card = dock.findViewById(R.id.card);
-            if (card != null) w = card.getWidth();
+        int cell;
+        int w;
+        if (hosted) {
+            int gap = Math.round(16 * density);
+            int content = AboveDock.contentWidth(grid, density);
+            w = Math.max(1, (content - gap) / AboveDock.MAX_CARDS);
+            cell = w; // gap entre cards via decoration na RecommendedRow; Continue usa margem no create
+        } else {
+            cell = inner / columns;
+            w = 0;
+            View dock = dockChild();
+            if (dock != null) {
+                View card = dock.findViewById(R.id.card);
+                if (card != null) w = card.getWidth();
+            }
+            if (w <= 0) w = AppAdapter.tileWidthPx(inner, columns, density);
         }
-        if (w <= 0) w = AppAdapter.tileWidthPx(inner, columns, density);
-        if (w != tileW || cell != cellW) {
+        int h = Math.round(w * 9f / 16f);
+        if (hosted) {
+            int maxH = AboveDock.maxPosterHeight(grid, density);
+            if (h > maxH) h = maxH; // largura permanece 2 colunas; thumb em centerCrop
+        }
+        if (w != tileW || cell != cellW || h != tileH) {
             tileW = w;
-            tileH = Math.round(w * 9f / 16f);
+            tileH = h;
             cellW = cell;
-            list.setPadding(grid.getPaddingLeft(), 0, grid.getPaddingRight(), 0);
-            header.setPadding(grid.getPaddingLeft() + (cell - w) / 2, 0, 0, 0);
+            int side = hosted ? 0 : grid.getPaddingLeft();
+            list.setPadding(side, 0, hosted ? 0 : grid.getPaddingRight(), 0);
+            header.setPadding(side, 0, 0, 0);
             list.setAdapter(adapter);   // new holders at the new size
         }
         int height = Math.round(HEADER_DP * density) + itemHeight();
@@ -369,14 +405,21 @@ final class ContinueRow {
     }
 
     boolean focusIndex(int index) {
-        RecyclerView.ViewHolder vh = list.findViewHolderForAdapterPosition(index);
+        if (items.isEmpty()) return false;
+        int target = Math.max(0, Math.min(items.size() - 1, index));
+        RecyclerView.ViewHolder vh = list.findViewHolderForAdapterPosition(target);
         if (vh != null) return ((Holder) vh).card.requestFocus();
-        list.scrollToPosition(index);
+        list.scrollToPosition(target);
         list.post(() -> {
-            RecyclerView.ViewHolder h = list.findViewHolderForAdapterPosition(index);
+            RecyclerView.ViewHolder h = list.findViewHolderForAdapterPosition(target);
             if (h != null) ((Holder) h).card.requestFocus();
         });
         return true;
+    }
+
+    /** Last card in the row (used when arriving from Recommended via Left). */
+    boolean focusLast() {
+        return focusIndex(items.size() - 1);
     }
 
     private int columnOf(int index) {
@@ -485,15 +528,16 @@ final class ContinueRow {
         item.setLayoutParams(new RecyclerView.LayoutParams(cellW, itemHeight()));
 
         int pad = dp(SoftShadow.PAD_DP);
-        float radius = AppAdapter.cornerRadius(w, density);
+        // Shelf cards: tvOS-like radius (≥20dp), not the tighter dock tile radius.
+        float radius = Math.min(28f * density, Math.max(18f * density, w * 0.045f));
         View shadow = new View(ctx);
         shadow.setBackground(SoftShadow.drawable(ctx.getResources(), w, h, radius));
         shadow.setAlpha(0f);
         shadow.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         FrameLayout.LayoutParams slp = new FrameLayout.LayoutParams(w + 2 * pad, h + 2 * pad,
-                Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+                Gravity.TOP | Gravity.START);
+        slp.leftMargin = -pad;
         slp.topMargin = -pad;
-        slp.bottomMargin = -pad;
         item.addView(shadow, slp);
 
         FrameLayout card = new FrameLayout(ctx);
@@ -510,7 +554,7 @@ final class ContinueRow {
             }
         });
         card.setClipToOutline(true);
-        item.addView(card, new FrameLayout.LayoutParams(w, h, Gravity.TOP | Gravity.CENTER_HORIZONTAL));
+        item.addView(card, new FrameLayout.LayoutParams(w, h, Gravity.TOP | Gravity.START));
 
         ImageView placeholderIcon = new ImageView(ctx);
         placeholderIcon.setAlpha(0.35f);
@@ -519,30 +563,25 @@ final class ContinueRow {
         image.setScaleType(ImageView.ScaleType.CENTER_CROP);
         card.addView(image, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
+        // Scrim always on: title overlays artwork; contrast target ≥4.5:1 (HIG color / UX).
         View scrim = new View(ctx);
         scrim.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{0x00000000, 0x8C000000}));
-        card.addView(scrim, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Math.round(h * 0.42f),
-                Gravity.BOTTOM));
-        View bar = new View(ctx);
-        FrameLayout.LayoutParams blp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(4),
-                Gravity.BOTTOM);
-        blp.leftMargin = dp(12);
-        blp.rightMargin = dp(12);
-        blp.bottomMargin = dp(54);
-        card.addView(bar, blp);
+                new int[]{0x00000000, 0x33000000, 0xCC000000}));
+        card.addView(scrim, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                Math.max(Math.round(h * 0.48f), Math.round(56 * density)), Gravity.BOTTOM));
         GlareView glare = new GlareView(ctx);
         glare.setAlpha(0f);
         card.addView(glare, new FrameLayout.LayoutParams(2 * w, 2 * h, Gravity.CENTER));
         glare.setTileSize(w, h);
 
-        // The title and the app sit on the artwork, like the tvOS shelves: the row stays one tile tall.
+        // Title and app on the artwork (tvOS shelf): the row stays one tile tall.
         LinearLayout textBlock = new LinearLayout(ctx);
         textBlock.setOrientation(LinearLayout.VERTICAL);
         TextView title = new TextView(ctx);
-        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17);
         title.setMaxLines(1);
         title.setEllipsize(TextUtils.TruncateAt.END);
+        title.setLineSpacing(0f, 1.05f);
         Apple.style(title, Apple.MEDIUM, Apple.TEXT, density);
         textBlock.addView(title, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -550,33 +589,39 @@ final class ContinueRow {
         appRow.setOrientation(LinearLayout.HORIZONTAL);
         appRow.setGravity(Gravity.CENTER_VERTICAL);
         ImageView appIcon = new ImageView(ctx);
-        appRow.addView(appIcon, new LinearLayout.LayoutParams(dp(14), dp(14)));
+        appIcon.setVisibility(View.GONE);
+        appRow.addView(appIcon, new LinearLayout.LayoutParams(0, 0));
         TextView app = new TextView(ctx);
-        app.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        app.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
         app.setSingleLine(true);
         app.setEllipsize(TextUtils.TruncateAt.END);
-        Apple.style(app, Apple.REGULAR, Apple.TEXT_2, density);
+        Apple.style(app, Apple.REGULAR, 0xE6FFFFFF, density);
         LinearLayout.LayoutParams alp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        alp.leftMargin = dp(5);
         appRow.addView(app, alp);
         LinearLayout.LayoutParams appLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT);
-        appLp.topMargin = dp(3);
+        appLp.topMargin = dp(4);
         textBlock.addView(appRow, appLp);
         FrameLayout.LayoutParams textLp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM);
-        textLp.leftMargin = dp(12);
-        textLp.rightMargin = dp(12);
-        textLp.bottomMargin = dp(11);
+        textLp.leftMargin = dp(16);
+        textLp.rightMargin = dp(16);
+        textLp.bottomMargin = dp(18);
         card.addView(textBlock, textLp);
+
+        // Full-bleed progress on the poster edge — does not compete with the title.
+        View bar = new View(ctx);
+        FrameLayout.LayoutParams blp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(3),
+                Gravity.BOTTOM);
+        card.addView(bar, blp);
 
         AppleFocus focus = new AppleFocus(item, card, shadow, glare, animations, parallax, reduced);
         focus.setTileSize(w, h);
         Holder holder = new Holder(item, card, image, placeholderIcon, scrim, bar, title, appIcon, app, focus);
-        title.setAlpha(0.8f);
+        title.setAlpha(0.92f);
         card.setOnFocusChangeListener((v, has) -> {
             focus.onFocusChanged(has);
-            float a = has ? 1f : 0.8f;
+            float a = has ? 1f : 0.92f;
             if (Apple.motion(animations)) title.animate().alpha(a).setDuration(150).start();
             else title.setAlpha(a);
             if (has) {
@@ -610,8 +655,11 @@ final class ContinueRow {
                 case KeyEvent.KEYCODE_DPAD_RIGHT:
                     focus.onKey(keyCode);
                     boolean left = keyCode == KeyEvent.KEYCODE_DPAD_LEFT;
-                    // The row's ends hold focus: it never wraps or leaves the row sideways.
-                    if (left && pos == 0 || !left && pos == items.size() - 1) return true;
+                    // Edge: ask AboveDock to switch section; always keep the key so focus does not escape.
+                    if (left && pos == 0 || !left && pos == items.size() - 1) {
+                        host.onRowSide(!left);
+                        return true;
+                    }
                     focusIndex(pos + (left ? -1 : 1));
                     return true;
                 default:
@@ -628,11 +676,13 @@ final class ContinueRow {
         Drawable icon = icons.get(it.pkg);
         h.appIcon.setImageDrawable(icon);
         h.placeholderIcon.setImageDrawable(icon);
-        h.card.setContentDescription(it.title + (label == null ? "" : ", " + label));
         boolean hasProgress = it.progress > 0.005f;
+        h.scrim.setVisibility(View.VISIBLE);
         h.bar.setVisibility(hasProgress ? View.VISIBLE : View.GONE);
-        h.scrim.setVisibility(hasProgress ? View.VISIBLE : View.GONE);
         h.progress.setProgress(it.progress);
+        String desc = it.title + (label == null ? "" : ", " + label);
+        if (hasProgress) desc += ", " + Math.round(it.progress * 100f) + "%";
+        h.card.setContentDescription(desc);
         h.focus.snap(h.card.isFocused());
         String key = ContinueImages.keyOf(it);
         h.imageKey = key;

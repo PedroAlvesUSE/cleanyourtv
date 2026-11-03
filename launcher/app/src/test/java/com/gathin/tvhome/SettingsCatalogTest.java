@@ -72,7 +72,7 @@ public class SettingsCatalogTest {
                 Config.FEATURE_ADVANCED_EFFECTS,
                 "wallpaper_sources", "wallpaper_credit", "wallpaper_diag", "seasonal_wallpaper",
                 Apple.STYLE, Apple.PARALLAX, Apple.TOP_SHELF, Apple.AUTO_ACCENT,
-                "mic_tizentube", "quick_menu", "sleep_timer", "tv_panel", "quick_clean", "config_backup",
+                "mic_youtube", "quick_menu", "sleep_timer", "tv_panel", "quick_clean", "config_backup",
                 "phone_remote", "parental", "guest_mode"}) {
             for (SettingRow row : all()) if (built.equals(row.key)) assertFalse(built, row.soon);
         }
@@ -83,7 +83,7 @@ public class SettingsCatalogTest {
         assertFalse(Config.FEATURES.get(Config.FEATURE_DOCK_GLOW));
         assertTrue(Config.FEATURES.get("apple_style"));
         assertTrue(Config.FEATURES.get("parallax"));
-        for (String key : new String[]{"wallpaper_sources", "continue_watching", "mic_tizentube", "profiles",
+        for (String key : new String[]{"wallpaper_sources", "continue_watching", "mic_youtube", "profiles",
                 "night_mode", "quick_clean", "own_screensaver"}) {
             assertFalse(key, Config.FEATURES.get(key));
         }
@@ -100,7 +100,7 @@ public class SettingsCatalogTest {
 
     @Test
     public void systemFunctionsStayOffAndPhoneRemoteNeedsAnOptIn() {
-        for (String key : new String[]{"mic_tizentube", "quick_menu", "sleep_timer", "tv_panel", "quick_clean",
+        for (String key : new String[]{"mic_youtube", "quick_menu", "sleep_timer", "tv_panel", "quick_clean",
                 "config_backup", "phone_remote", "parental", "guest_mode"}) {
             assertFalse(key, Config.FEATURES.get(key));
         }

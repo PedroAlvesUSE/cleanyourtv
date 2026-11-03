@@ -84,10 +84,10 @@ final class Config {
             "apple_style", true, "parallax", true, "continue_watching", false, "continue_media_session", false, "recents_row", false,
             "top_shelf", false, "clock_weather", false, "greeting", false, "global_search", false,
             "quick_menu", false, "sleep_timer", false, "profiles", false,
-            "config_backup", false, "quick_resume", false, "watch_later", false, "owntv_channels", false,
+            "config_backup", false, "quick_resume", false, "watch_later", false,
             "phone_remote", false, "night_mode", false, "parental", false, "guest_mode", false,
             "seasonal_wallpaper", false, "auto_accent", false, "own_screensaver", false, "tv_panel", false,
-            "quick_clean", false, "wallpaper_diag", false, "mic_tizentube", false, "recommended_row", false);
+            "quick_clean", false, "wallpaper_diag", false, "mic_youtube", false, "recommended_row", false);
 
     private static Map<String, Boolean> features(Object... pairs) {
         Map<String, Boolean> out = new LinkedHashMap<>();
@@ -256,7 +256,7 @@ final class Config {
         return resolveFeature(theme != null && theme, null, tv);
     }
 
-    /** Teclas de microfone que abrem a busca no TizenTube (config.json, mic_keycodes); padrão em {@link MicSearch}. */
+    /** Teclas de microfone que abrem a busca no YouTube (config.json, mic_keycodes); padrão em {@link MicSearch}. */
     static int[] micKeycodes(Context ctx) {
         File dir = dir(ctx);
         JSONObject json = read(dir == null ? null : new File(dir, FILE_NAME));

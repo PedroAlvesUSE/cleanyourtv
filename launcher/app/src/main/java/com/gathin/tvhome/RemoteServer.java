@@ -26,7 +26,7 @@ import java.util.Set;
 
 /**
  * Controle pelo celular (phone_remote): página web na rede local com touchpad (setas e OK), Voltar, Home,
- * volume, mudo, teclas de mídia, busca no TizenTube, lista de apps, texto e envio de link. Desligado por padrão. Só roda com a opção ligada e o serviço de acessibilidade ativo (o
+ * volume, mudo, teclas de mídia, busca no YouTube, lista de apps, texto e envio de link. Desligado por padrão. Só roda com a opção ligada e o serviço de acessibilidade ativo (o
  * HomeKeyService liga e desliga o servidor). Exige o PIN de 4 dígitos mostrado na TV.
  */
 final class RemoteServer implements LanServer.Handler {

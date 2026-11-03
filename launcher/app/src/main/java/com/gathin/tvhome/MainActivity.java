@@ -252,6 +252,16 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             hideGlass();
             hideHero();
         }
+
+        @Override public boolean onRowSide(boolean right) {
+            if (aboveDock == null) return false;
+            boolean moved = aboveDock.switchFromEdge(right);
+            if (moved) {
+                grid.playSoundEffect(right ? SoundEffectConstants.NAVIGATION_RIGHT
+                        : SoundEffectConstants.NAVIGATION_LEFT);
+            }
+            return moved;
+        }
     };
     /** Sharper banners for the Top Shelf, loaded the first time each dock app is focused. */
     private final Map<String, Drawable> shelfBanners = new HashMap<>();
@@ -523,6 +533,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             // Where the rows cannot fit even at the smallest tile (3 rows with the title on), the title keeps its
             // room above the dock and the last rows run off the bottom instead of the title drawing over the clock.
             if (MainActivity.this.dockRow && cfg.dockTitle && rowsBelowDock > 0) want = Math.max(want, (int) (AppAdapter.TITLE_ROOM_DP * density));
+            // Shelf Continuar/Recomendados: reserva altura para 2 posters acima da dock (não esmagar os cards).
+            if (aboveDock != null && MainActivity.this.dockRow) {
+                want = Math.max(want, AboveDock.shelfClearance(inner, h, density));
+            }
             // No dock to push down: the grid starts at the top, with room for the first row's zoom and glass.
             if (!MainActivity.this.dockRow) want = (int) (AppAdapter.TOP_ROOM_DP * density);
             if (grid.getPaddingTop() != want) {
@@ -699,6 +713,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         }
         promptsPaused = false;
         if (continueRow != null) ContinueListener.ensureRunning(this);
+        HomeKeyService.ensureRunning(this);
         if (aboveDock != null) aboveDock.start();
         if (rebuildOnResume) {
             tilesReady = false;

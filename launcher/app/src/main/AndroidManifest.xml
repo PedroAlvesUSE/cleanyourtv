@@ -21,6 +21,10 @@
          FINE" rule does not apply here. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"
         tools:ignore="CoarseFineLocation" />
+    <!-- quick_menu / mic / remote: religa o HomeKeyService após force-stop ou reinstalar.
+         Concedida só por adb: pm grant com.gathin.tvhome android.permission.WRITE_SECURE_SETTINGS -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
 
     <!-- Android 11+ package visibility: lets the launcher list the TV apps it shows as tiles, and the
          apps that declare a module card (docs/specs/card.md). -->
@@ -100,7 +104,7 @@
             android:noHistory="true"
             android:screenOrientation="landscape"
             android:theme="@android:style/Theme.Translucent.NoTitleBar.Fullscreen" />
-        <!-- Microphone button (mic_tizentube): transparent, asks for speech and opens TizenTube. -->
+        <!-- Microphone button (mic_youtube): transparent, asks for speech and opens YouTube. -->
         <activity
             android:name=".MicSearchActivity"
             android:exported="true"

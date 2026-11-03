@@ -172,7 +172,7 @@
     <string name="cw_remove">Remover da lista</string>
     <string name="set_later">Assistir depois</string>
     <string name="set_later_d">Uma lista do que você guardou para depois.</string>
-    <string name="set_channels">Canais do OwnTV</string>
+    <string name="set_channels">Canais favoritos</string>
     <string name="set_channels_d">Seus canais favoritos na tela inicial.</string>
     <string name="set_resume">Retomar com um clique</string>
     <string name="set_resume_d">OK num cartão continua de onde você parou.</string>
@@ -180,8 +180,8 @@
     <string name="set_remote_d">O que os botões do controle fazem.</string>
     <string name="set_keys">Botões de atalho</string>
     <string name="set_keys_d">Os botões de app do controle abrem os apps escolhidos.</string>
-    <string name="set_mic">Microfone abre o TizenTube</string>
-    <string name="set_mic_d">O botão do microfone pede a sua voz e busca no TizenTube. Com a função desligada, o botão vai para o assistente da TV.</string>
+    <string name="set_mic">Microfone busca no YouTube</string>
+    <string name="set_mic_d">O botão do microfone pede a sua voz e busca no YouTube. Com a função desligada, o botão vai para o assistente da TV.</string>
     <string name="set_quick_menu">Menu rápido</string>
     <string name="set_quick_menu_d">Segure Home para abrir volume, entradas, temporizador, Wi-Fi e protetor de tela.</string>
     <string name="set_phone">Controle pelo celular</string>
@@ -239,7 +239,7 @@
     <string name="diag_err">erro</string>
     <string name="diag_none">Nenhuma busca registrada ainda.</string>
     <string name="diag_off">Ligue antes o diagnóstico das fontes.</string>
-    <string name="mic_prompt">Buscar no TizenTube</string>
+    <string name="mic_prompt">Buscar no YouTube</string>
     <string name="mic_unavailable">Sem busca por voz nesta TV</string>
     <string name="cc_title">Controles rápidos</string>
     <string name="cc_volume">Volume</string>
@@ -298,6 +298,7 @@
     <string name="set_backup_open">Abrir backup</string>
     <string name="set_backup_open_d">Mostra um endereço, um PIN e um QR code para o celular.</string>
     <string name="set_recommended">Vídeos recomendados</string>
-    <string name="set_recommended_d">Uma linha de vídeos populares do YouTube acima da dock, por instâncias do Piped e Invidious. Sem chave necessária.</string>
+    <string name="set_recommended_d">A prateleira Recomendados da conta do YouTube aberta nesta TV.</string>
     <string name="rec_title">Recomendados</string>
+    <string name="rec_link_hint">No celular, abra %1$s e entre com a mesma conta Google usada nesta TV.</string>
 </resources>

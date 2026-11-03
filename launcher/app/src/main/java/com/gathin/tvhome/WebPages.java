@@ -216,7 +216,7 @@ final class WebPages {
             + "<label for=lnk data-t='Abrir link na TV|Open link on the TV'></label><div class=f>"
             + "<input id=lnk type=url inputmode=url enterkeyhint=go autocomplete=off placeholder='https://'>"
             + "<button class=go data-t='Abrir|Open'></button></div>"
-            + "<small data-t='Links do YouTube abrem no TizenTube.|YouTube links open in TizenTube.'></small></form>"
+            + "<small data-t='Links do YouTube abrem no YouTube TV.|YouTube links open in YouTube TV.'></small></form>"
             + "</div></section></main><div class=toast id=toast role=status aria-live=polite></div>";
 
     private static final String REMOTE_JS = """

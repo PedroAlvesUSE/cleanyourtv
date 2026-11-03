@@ -63,12 +63,26 @@ public final class QuickSettingsActivity extends Activity {
         finish();
     }
 
-    /** Anything else taking the screen (Home, an app, a screensaver) closes the panel. */
+    /**
+     * Lista do botão Settings: fecha no pause. Painel do Home longo: só no stop — o Home ainda
+     * pressionado ao abrir manda um pause e matava o painel antes de aparecer.
+     */
     @Override
     protected void onPause() {
         super.onPause();
-        finish();
-        overridePendingTransition(0, 0);
+        if (controlCenter == null) {
+            finish();
+            overridePendingTransition(0, 0);
+        }
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        if (controlCenter != null && !isChangingConfigurations()) {
+            finish();
+            overridePendingTransition(0, 0);
+        }
     }
 
     private void addRow(LinearLayout rows, int icon, int title, int status, Intent target) {

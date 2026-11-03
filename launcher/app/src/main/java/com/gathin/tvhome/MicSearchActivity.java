@@ -10,7 +10,7 @@ import android.widget.Toast;
 import java.util.ArrayList;
 
 /**
- * Activity transparente do botão de microfone (mic_tizentube): pede a fala (pt-BR) e abre a busca no TizenTube.
+ * Activity transparente do botão de microfone (mic_youtube): pede a fala (pt-BR) e abre a busca no YouTube.
  * Também responde a ACTION_ASSIST, para quem escolher o launcher como assistente (plano B no README do sistema).
  */
 public final class MicSearchActivity extends Activity {
@@ -21,7 +21,7 @@ public final class MicSearchActivity extends Activity {
     protected void onCreate(Bundle state) {
         super.onCreate(state);
         if (state != null) return;
-        if (!Config.feature(this, "mic_tizentube")) {
+        if (!Config.feature(this, "mic_youtube")) {
             forwardToGoogle();
             return;
         }
@@ -33,7 +33,7 @@ public final class MicSearchActivity extends Activity {
             startActivityForResult(speech, REQUEST);
         } catch (ActivityNotFoundException e) {
             Toast.makeText(this, R.string.mic_unavailable, Toast.LENGTH_LONG).show();
-            RemoteKeys.launch(this, MicSearch.TIZENTUBE);
+            RemoteKeys.launch(this, MicSearch.YOUTUBE_TV);
             finish();
         }
     }
